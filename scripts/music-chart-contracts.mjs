@@ -5,12 +5,18 @@ import vm from "node:vm";
 import "./catalog-distribution-contracts.mjs";
 
 const root = resolve(import.meta.dirname, "..");
-const [page, client, styles, catalogApi, chartApi] = await Promise.all([
+const [page, uploadPage, client, styles, catalogApi, chartApi, genreRoomSource, discoveryPage, discoveryClient, routeRegistry, netlifyConfig] = await Promise.all([
   readFile(resolve(root, "music/index.html"), "utf8"),
+  readFile(resolve(root, "music-upload/index.html"), "utf8"),
   readFile(resolve(root, "music/music.js"), "utf8"),
   readFile(resolve(root, "music/music.css"), "utf8"),
   readFile(resolve(root, "netlify/functions/release-catalog.mjs"), "utf8"),
-  readFile(resolve(root, "netlify/functions/chart.mjs"), "utf8")
+  readFile(resolve(root, "netlify/functions/chart.mjs"), "utf8"),
+  readFile(resolve(root, "music/genre-rooms.js"), "utf8"),
+  readFile(resolve(root, "discover/index.html"), "utf8"),
+  readFile(resolve(root, "discover/discover.js"), "utf8"),
+  readFile(resolve(root, "lib/route-registry.js"), "utf8"),
+  readFile(resolve(root, "netlify.toml"), "utf8")
 ]);
 
 assert.match(chartApi, /export const config\s*=\s*\{\s*path:\s*\["\/api\/catalog\/chart",\s*"\/api\/catalog\/vote"\]\s*\}/, "chart routes must be literal strings so Netlify can statically parse both endpoints");
@@ -19,11 +25,43 @@ assert.match(page, /The living chart/, "music catalog must identify the live cha
 assert.match(page, /<details class="catalog-genre-disclosure" id="catalogGenreDisclosure">/, "the public catalog genre list must be collapsible");
 assert.match(page, /id="allReleasesFilter"/, "All releases remains available as a quick filter");
 assert.match(styles, /\.catalog-genre-disclosure > summary::after/, "the collapsed genre filter needs a visible disclosure affordance");
-assert.match(page, /Hip-Hop \/ Rap/, "chart must include a hip-hop room");
-assert.match(page, /R&amp;B \/ Soul/, "chart must include an R&B and soul room");
-assert.match(page, /House \/ Dance/, "chart must include a house and dance room");
-assert.match(page, /Gospel \/ Inspirational/, "chart must include a gospel room");
-assert.match(page, /Afrobeats \/ Global/, "chart must include a global room");
+assert.match(page, /Electronic &amp; Deep House/, "chart must expose the electronic and deep-house gateway");
+assert.match(page, /Afrobeats &amp; Global Sounds/, "chart must name the global gateway without making it a catch-all");
+assert.match(page, /Ambient &amp; Experimental/, "chart must expose the ambient gateway");
+assert.match(page, /Rock &amp; Alternative/, "chart must expose the rock gateway");
+assert.match(page, /Hip-Hop \/ Rap/, "chart must keep specialist hip-hop room");
+assert.match(page, /R&amp;B \/ Soul/, "chart must keep specialist R&B and soul room");
+assert.match(page, /Gospel \/ Inspirational/, "chart must keep specialist gospel room");
+assert.match(page, /This room features Afrobeats and global sounds, ranked by recent 7-day listener activity/, "global-room tooltip describes the audience and ranking window");
+const genreWindow = {};
+vm.runInNewContext(genreRoomSource, { window: genreWindow });
+assert.deepEqual(Array.from(genreWindow.HaloGenreRooms.gateways, room => room.label), [
+  "Electronic & Deep House", "Afrobeats & Global Sounds", "Ambient & Experimental", "Rock & Alternative"
+], "four genre gateways receive equal primary placement");
+assert.equal(genreWindow.HaloGenreRooms.matches({ genres: ["Atmospheric Deep House", "Afro House"], bpm: 122 }, "dance"), true);
+assert.equal(genreWindow.HaloGenreRooms.matches({ genres: ["Afrobeats", "Amapiano", "Global Sounds"] }, "global"), true);
+assert.equal(genreWindow.HaloGenreRooms.matches({ catalog: { genre: "Cinematic Ambient, Experimental" } }, "ambient"), true);
+assert.equal(genreWindow.HaloGenreRooms.matches({ genres: ["Alternative Rock", "Indie Rock"] }, "rock-alternative"), true);
+assert.equal(genreWindow.HaloGenreRooms.matches({ genres: ["Afrobeats"] }, "dance"), false, "global rhythms are not swept into electronic");
+assert.equal(genreWindow.HaloGenreRooms.matches({ genres: ["Deep House"] }, "global"), false, "electronic releases keep their own gateway");
+for (const [markup, name] of [[uploadPage, "music-upload"], [page, "music"]]) {
+  for (const label of ["Electronic &amp; Deep House", "Afrobeats &amp; Global Sounds", "Ambient &amp; Experimental", "Rock &amp; Alternative"]) {
+    assert.ok(markup.includes(label), `${name} shows the equal ${label} gateway`);
+  }
+  assert.match(markup, /More genre rooms/, `${name} retains specialist genre tabs`);
+  assert.match(markup, /src="\/music\/genre-rooms\.js"[\s\S]*src="\/music\/music\.js"/, `${name} loads shared room metadata before the chart client`);
+}
+assert.match(discoveryPage, /id="genreGateways"/);
+assert.match(discoveryPage, /id="specialistRooms"/);
+assert.match(discoveryPage, /id="audio" controls preload="none"/, "discovery playback is explicit and user initiated");
+assert.match(discoveryClient, /filter\(approved\)/, "discovery only shows approved public releases");
+assert.match(discoveryClient, /resolveAudio\(release, \{ preferPreview: true, requirePlayable: true \}\)/);
+assert.match(discoveryClient, /new URLSearchParams\(\{ song: release\.id, add: release\.id \}\)/, "Add to Mix returns to the existing playlist picker");
+assert.doesNotMatch(discoveryClient, /innerHTML/, "artist-supplied text is never interpolated into markup");
+assert.match(client, /function openRequestedAdd\(\)/, "music catalog opens the existing private playlist picker");
+assert.match(client, /requestedRoom/, "catalog follows discovery gateway links");
+assert.match(routeRegistry, /directoryRoute\("Artist Discovery", "\/discover\/", "discover\/index\.html"/);
+assert.match(netlifyConfig, /from = "\/discover\/"[\s\S]*to = "\/discover\/index\.html"/);
 assert.match(page, /transparent HALO activity chart—not an industry sales chart/, "chart must explain what its rankings represent");
 assert.match(catalogApi, /recent_listens/, "catalog API must expose rolling recent listening activity");
 assert.match(catalogApi, /previous_listens/, "catalog API must expose the comparison window");
@@ -66,6 +104,30 @@ assert.match(client, /state\.releases = \(Array\.isArray\(data\.releases\) \? da
   assert.deepEqual(visible, ["satellite-01", "blessed"], "shop filter must hide pending, draft, and status-less tracks");
 }
 assert.match(styles, /\.chart-console/, "chart console must have a dedicated responsive layout");
+{
+  const names = ["escapeHtml", "hasChartActivity", "chartSignal", "chartOrbitMarkup"];
+  const sources = names.map(name => {
+    const source = client.match(new RegExp(`  function ${name}\\([^\\n]*\\) \\{[\\s\\S]*?\\n  \\}`))?.[0];
+    assert.ok(source, `${name} must exist`);
+    return source;
+  });
+  const orbit = new Function(`${sources.join("\n")}\nreturn chartOrbitMarkup;`)();
+  const markup = orbit({
+    title: '<Signal & song>',
+    chartActivity: { recentListens: 2, recentOpens: 1, previousListens: 2, previousOpens: 0 }
+  });
+  assert.match(markup, /Signal orbit for &lt;Signal &amp; song&gt;/);
+  assert.match(markup, /stroke-dasharray="100\.00 100"/);
+  assert.match(markup, /stroke-dasharray="84\.21 100"/, "rings compare real weighted period totals");
+  assert.match(markup, /<strong>19<\/strong><small>2 listen exits · 1 room opens/);
+  assert.match(markup, /<strong>16<\/strong><small>2 listen exits · 0 room opens/);
+  assert.match(markup, /Not a timeline or listener count/);
+  assert.match(orbit({ title: "Unknown" }), /Waiting for a signal/);
+  assert.doesNotMatch(orbit({ title: "Unknown" }), /stroke-dasharray=/);
+  assert.match(orbit({ title: "Empty", chartActivity: { recentListens: 0, recentOpens: 0, previousListens: 0, previousOpens: 0 } }), /Waiting for a signal/);
+  assert.match(client, /\$\{chartOrbitMarkup\(release\)\}/, "the selected release displays its own orbit");
+  assert.match(styles, /@media \(prefers-reduced-motion: no-preference\)\s*\{\s*\.orbit-guide, \.orbit-satellite/, "only decorative elements animate when motion is allowed");
+}
 {
   const source = client.match(/function isChartRelease\(release\) \{[\s\S]*?\n  \}/)?.[0];
   assert.ok(source, "shop must define its chart publication filter");

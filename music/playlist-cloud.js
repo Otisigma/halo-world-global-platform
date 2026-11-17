@@ -1,5 +1,6 @@
 import { contentAllowed, playlistWorld } from "../lib/playlist-world.js";
 import { mountPlaylistWorldEditor } from "./playlist-world-editor.js";
+import { createPlaylistTrackPreview } from "./playlist-track-preview.js";
 
 export function createPlaylistClient(fetcher) {
   let generation = 0;
@@ -213,7 +214,12 @@ export function mountCloudPlaylists({ document, window, root, getReleases, studi
     }
     const list = element("ol");
     playlist.tracks.forEach((track, index) => {
-      const row = element("li", track.available ? `${track.title} - ${track.artist}` : "Song unavailable in the current public catalog");
+      const row = element("li");
+      if (track.available) row.append(createPlaylistTrackPreview({
+        document, window, release: track,
+        onSelect: () => { stopRoom(); studio.playExternal(playlist, track.id).catch(fail); }
+      }));
+      else row.textContent = "Song unavailable in the current public catalog";
       if (canEdit) for (const [text, direction] of [["Move up", -1], ["Move down", 1], ["Remove", 0]]) {
         if (direction && (index + direction < 0 || index + direction >= playlist.releaseIds.length)) continue;
         row.append(button(`${text}: ${track.title || "unavailable song"}`, async () => {
@@ -229,6 +235,7 @@ export function mountCloudPlaylists({ document, window, root, getReleases, studi
     target.append(list);
     mountPlaylistWorldEditor({
       document, window, root: target, playlist, getReleases, canEdit, report,
+      play: (next, releaseId) => { stopRoom(); return studio.playExternal(next, releaseId); },
       save: async next => { await update(next); report("Account world saved."); await open(playlist.id); }
     });
     if (playlist.role !== "listener") {
@@ -323,7 +330,7 @@ export function mountCloudPlaylists({ document, window, root, getReleases, studi
   });
   for (const event of ["halo:chart-queue-start", "halo:discovery-queue-start"]) window.addEventListener(event, stopRoom);
   document.addEventListener("click", event => {
-    if (roomSession && !roomSession.hosting && (event.target.closest("[data-play-track-id], [data-player-close]")
+    if (roomSession && !roomSession.hosting && (event.target.closest("[data-play-track-id], [data-player-close], .playlist-track-item")
       || (event.target.closest("[data-player-toggle]") && player.audio.paused))) stopRoom();
   });
   roomContent.addEventListener("change", () => { if (roomSession && !roomSession.hosting) followTick().catch(fail); });

@@ -1,0 +1,47 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#090b0a">
+  <meta name="description" content="Discover public independent artists and releases across Electronic & Deep House, Afrobeats & Global Sounds, Ambient & Experimental, and Rock & Alternative.">
+  <title>Discover Artists & Releases | HALO Music World</title>
+  <link rel="icon" href="/assets/halo-app-icon.svg">
+  <link rel="stylesheet" href="/accessibility.css">
+  <link rel="stylesheet" href="/halo-brand.css">
+  <link rel="stylesheet" href="/release-artwork.css">
+  <link rel="stylesheet" href="/discover/discover.css">
+  <script src="/release-artwork.js" defer></script>
+  <script src="/music/genre-rooms.js" defer></script>
+  <script src="/discover/discover.js" defer></script>
+</head>
+<body>
+  <a class="skip" href="#releaseGrid">Skip to releases</a>
+  <header class="discover-nav">
+    <a class="brand" href="/halo"><img src="/assets/halo-logo-mark.webp" alt=""><span><strong>HALO</strong><small>Music World</small></span></a>
+    <nav aria-label="Music navigation"><a href="/music/">Music catalog</a><a href="/obsidian/">Obsidian Gateway</a><a href="/artists/">Artist Rooms</a></nav>
+  </header>
+  <main>
+    <header class="hero">
+      <p class="eyebrow">Independent / artist-led / multi-genre</p>
+      <h1>Discover artists<br><em>&amp; master releases.</em></h1>
+      <p>HALO Music World is an independent multi-genre music platform. Explore distinct, equally featured genre gateways, artist-supplied release stories and the public catalog. No genre is a catch-all for the others.</p>
+    </header>
+    <section aria-labelledby="gatewaysTitle">
+      <div class="section-title"><h2 id="gatewaysTitle">Choose a genre gateway</h2><p id="releaseCount" role="status" aria-live="polite">Loading public releases…</p></div>
+      <div id="genreGateways" class="genre-gateways" role="group" aria-label="Filter public releases by genre gateway"></div>
+      <details class="other-rooms"><summary>More genre rooms</summary><div id="specialistRooms" role="group" aria-label="Supplemental genre rooms"></div></details>
+      <label class="search">Search public releases<input id="search" type="search" autocomplete="off" placeholder="Artist, track, genre…"></label>
+      <p id="genreDescription" class="room-description"></p>
+      <p id="status" class="status" role="status" aria-live="polite"></p>
+      <div id="releaseGrid" class="release-grid" aria-live="polite"></div>
+    </section>
+    <section class="listening" aria-labelledby="listeningTitle">
+      <h2 id="listeningTitle">Your selected release</h2><p id="playerStatus" role="status" aria-live="polite">Playback starts only when you choose Play on a public release.</p>
+      <audio id="audio" controls preload="none" aria-label="Selected public release audio"></audio>
+      <p class="note">Only catalog-approved playable audio appears in this player. The release page remains available for releases without an in-page preview.</p>
+    </section>
+  </main>
+  <footer><span>HALO Music World / independent artists, many genres</span><a href="/music/">Open the full catalog</a></footer>
+</body>
+</html>

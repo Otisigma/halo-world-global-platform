@@ -45,6 +45,23 @@
   to = "/empath-journey/index.html"
   status = 200
 
+[[redirects]]
+  from = "/discover/"
+  to = "/discover/index.html"
+  status = 200
+
+[[redirects]]
+  from = "/global-chart"
+  to = "/satellites/catalog-lab/public/"
+  status = 301
+  force = true
+
+[[redirects]]
+  from = "/global-chart/"
+  to = "/satellites/catalog-lab/public/"
+  status = 301
+  force = true
+
 [[headers]]
   for = "/*"
   [headers.values]

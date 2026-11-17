@@ -24,18 +24,17 @@
   const playlistRoot = document.querySelector("#personalPlaylistHub");
   let playlistStudio;
   const configuredFeaturedReleaseId = elements.featured?.dataset.featuredReleaseId?.trim() || "";
-  const requestedReleaseId = new URLSearchParams(window.location.search).get("song")?.trim() || "";
+  const initialParams = new URLSearchParams(window.location.search);
+  const requestedReleaseId = initialParams.get("song")?.trim() || "";
+  const requestedAddId = initialParams.get("add")?.trim() || "";
+  const requestedRoom = initialParams.get("room")?.trim() || "";
   const fallbackArtwork = window.HaloReleaseArtwork?.DEFAULT_RELEASE_ARTWORK || "/assets/releases/halo-premium-placeholder.svg";
   const fallbackArtworkBadge = window.HaloReleaseArtwork?.DEFAULT_RELEASE_ARTWORK_BADGE || "HALO placeholder cover";
   const satelliteVideoFallbackEnabled = new URLSearchParams(window.location.search).get("satellite") === "music-video-fallback";
-  const chartRooms = {
-    all: [],
-    "hip-hop": ["hip hop", "hip-hop", "rap", "drill", "grime"],
-    rnb: ["r&b", "rnb", "soul", "neo soul", "neo-soul"],
-    dance: ["house", "dance", "electronic", "techno", "garage", "club"],
-    gospel: ["gospel", "christian", "worship", "inspirational", "spiritual"],
-    global: ["afrobeat", "afrobeats", "amapiano", "global", "reggae", "dancehall", "latin", "world"]
-  };
+  const genreRooms = window.HaloGenreRooms;
+  const chartRooms = genreRooms?.chartRooms || { all: [] };
+  if (Object.hasOwn(chartRooms, requestedRoom)) state.chartRoom = requestedRoom;
+  let requestedAddHandled = false;
 
   function escapeHtml(value) {
     return String(value ?? "").replace(/[&<>"']/g, character => ({
@@ -608,6 +607,37 @@
     return { recent, previous, score: recent * 2 + previous };
   }
 
+  function chartOrbitMarkup(release) {
+    if (!hasChartActivity(release)) {
+      return `<section class="signal-orbit" aria-label="Signal orbit"><div class="signal-orbit-heading"><span>HALO / SIGNAL ORBIT</span><strong>Waiting for a signal</strong></div><p>No recorded activity is available for this release in the last 14 days.</p></section>`;
+    }
+    const activity = release.chartActivity;
+    const { recent, previous } = chartSignal(release);
+    const maximum = Math.max(recent, previous);
+    const arc = value => (value / maximum * 100).toFixed(2);
+    return `<section class="signal-orbit" aria-label="Signal orbit for ${escapeHtml(release.title)}">
+      <div class="signal-orbit-heading"><span>HALO / SIGNAL ORBIT</span><strong>Two weeks. One signal.</strong></div>
+      <div class="signal-orbit-body">
+        <svg class="signal-orbit-graphic" viewBox="0 0 200 200" aria-hidden="true">
+          <circle class="orbit-guide" cx="100" cy="100" r="90"/>
+          <circle class="orbit-track" cx="100" cy="100" r="72"/>
+          <circle class="orbit-track" cx="100" cy="100" r="54"/>
+          <circle class="orbit-arc orbit-recent" cx="100" cy="100" r="72" pathLength="100" stroke-dasharray="${arc(recent)} 100"/>
+          <circle class="orbit-arc orbit-previous" cx="100" cy="100" r="54" pathLength="100" stroke-dasharray="${arc(previous)} 100"/>
+          <circle class="orbit-core" cx="100" cy="100" r="29"/>
+          <path class="orbit-mark" d="M81 107 91 89 100 109 109 89 119 107"/>
+          <circle class="orbit-satellite" cx="100" cy="10" r="3"/>
+        </svg>
+        <div class="signal-orbit-data">
+          <p>Weighted activity, relative to the larger of these two periods. Not a timeline or listener count.</p>
+          <div class="orbit-period orbit-period-recent"><span>Last 7 days</span><strong>${recent.toLocaleString()}</strong><small>${activity.recentListens.toLocaleString()} listen exits · ${activity.recentOpens.toLocaleString()} room opens</small></div>
+          <div class="orbit-period orbit-period-previous"><span>Previous 7 days</span><strong>${previous.toLocaleString()}</strong><small>${activity.previousListens.toLocaleString()} listen exits · ${activity.previousOpens.toLocaleString()} room opens</small></div>
+        </div>
+      </div>
+      <p class="signal-orbit-note">Each listen exit × 8 + each release-room open × 3. Decorative motion does not represent live activity.</p>
+    </section>`;
+  }
+
   function movementFor(release) {
     const signal = chartSignal(release);
     const difference = signal.recent - signal.previous;
@@ -618,10 +648,7 @@
   }
 
   function releaseMatchesRoom(release) {
-    const roomGenres = chartRooms[state.chartRoom] || [];
-    if (!roomGenres.length) return true;
-    const genres = release.genres.map(normalized);
-    return roomGenres.some(roomGenre => genres.some(genre => genre.includes(normalized(roomGenre))));
+    return genreRooms ? genreRooms.matches(release, state.chartRoom) : state.chartRoom === "all";
   }
 
   function isChartRelease(release) {
@@ -648,6 +675,18 @@
   function renderChartCoverage(message) {
     if (!elements.chartCoverage) return;
     elements.chartCoverage.innerHTML = `<span>${escapeHtml(message)}</span> <a href="#allReleasesTitle">Browse all ${escapeHtml(String(state.releases.length))} ${state.releases.length === 1 ? "release" : "releases"} ↓</a>`;
+  }
+
+  function openRequestedAdd() {
+    if (!requestedAddId || requestedAddHandled || !playlistStudio
+      || !state.releases.some(release => release.id === requestedAddId)) return;
+    requestedAddHandled = true;
+    const trigger = [...document.querySelectorAll("[data-add-playlist]")]
+      .find(button => button.dataset.addPlaylist === requestedAddId);
+    playlistStudio.open(requestedAddId, trigger || null);
+    const url = new URL(window.location.href);
+    url.searchParams.delete("add");
+    window.history.replaceState(window.history.state, "", url);
   }
 
   function rankedReleases() {
@@ -857,6 +896,7 @@
         <h3>${escapeHtml(release.title)}</h3><p class="stage-artist">${escapeHtml(release.artist)}</p>
         <p class="stage-story">${escapeHtml(release.pitch || "Open the full release signal and approved campaign room.")}</p>
         <div class="stage-metrics"><span><strong>${hasChartActivity(release) ? Number(activity.recentListens) : "—"}</strong>Listen exits</span><span><strong>${hasChartActivity(release) ? Number(activity.recentOpens) : "—"}</strong>Room opens</span><span><strong>${escapeHtml(movement.value)}</strong>Momentum</span></div>
+        ${chartOrbitMarkup(release)}
         ${videoMarkup(video, release)}
         ${releaseActions(release)}
       </div>
@@ -1194,6 +1234,7 @@
       renderGenres();
       renderGrid();
       playlistStudio?.render();
+      openRequestedAdd();
       fetch("/api/videos", { headers: { Accept: "application/json" } })
         .then(videoResponse => videoResponse.ok ? videoResponse.json() : { videos: [] })
         .then(videoData => {
@@ -1345,6 +1386,7 @@
           src: trackStreamUrl(release), cover: releaseArtwork(release).src
         })
       });
+      openRequestedAdd();
     }).catch(error => {
       console.error("Playlist studio could not load", error);
       playlistRoot.textContent = "Playlists could not be opened. Reload the page to try again.";

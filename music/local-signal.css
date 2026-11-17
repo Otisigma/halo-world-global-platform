@@ -1,0 +1,14 @@
+.local-signal { margin-top: 32px; padding: 20px; border: 1px solid #536059; border-radius: 12px; color: #f3eee1; background: #111512; }
+.local-signal p { color: #c5cabb; line-height: 1.7; }
+.local-signal button, .local-signal select { padding: 10px 14px; margin: 4px; background: #090b0a; color: #f3eee1; border: 1px solid #727e70; font: inherit; }
+.local-signal button:not(:disabled):hover { background: #303b33; }
+.local-signal :is(button, select):focus-visible { outline: 3px solid #f2ff62; outline-offset: 3px; }
+.local-signal button:disabled { opacity: .5; }
+.local-signal[data-signal-skin="neon"] { border-color: #fa68da; background: #28102e; }
+.local-signal[data-signal-skin="amber"] { border-color: #ffc878; background: #302111; }
+.local-signal[data-signal-skin="midnight"] { border-color: #64cfff; background: #08162e; }
+body[data-signal-skin="neon"] { --signal-accent: #fa68da; }
+body[data-signal-skin="amber"] { --signal-accent: #ffc878; }
+body[data-signal-skin="midnight"] { --signal-accent: #64cfff; }
+body[data-signal-skin]:not([data-signal-skin="original"]) :is(.playlist-mix-controls, .gateway) { border: 1px solid var(--signal-accent); }
+body[data-signal-skin]:not([data-signal-skin="original"]) .pulse i { background: var(--signal-accent); }

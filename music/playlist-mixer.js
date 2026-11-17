@@ -15,7 +15,7 @@ export function reductionGain(samples) {
   return rms > .14 ? Math.max(.25, .14 / rms) : 1;
 }
 
-export function createPlaylistMixer({ window, player, report, onTrack }) {
+export function createPlaylistMixer({ window, player, report, onTrack, bindSignal }) {
   let context, master, decks, tracks = [], current = 0, activeDeck = 0, generation = 0, running = false, transitioning = false, preferences, fallbackAllowed = false;
   const sourceAllowed = track => {
     try {
@@ -46,6 +46,7 @@ export function createPlaylistMixer({ window, player, report, onTrack }) {
       fade.gain.value = 0;
       const deck = { audio, analyser, level, fade, samples: new Float32Array(512), version: 0, trackIndex: -1 };
       deck.telemetry = window.HaloListeningTelemetry?.bindAudio(audio, () => tracks[deck.trackIndex]?.id);
+      bindSignal?.(audio, () => tracks[deck.trackIndex]?.id, () => master.gain.value > 0 && fade.gain.value > 0);
       audio.addEventListener("timeupdate", () => tick(index));
       audio.addEventListener("ended", () => {
         if (running && index === activeDeck && !transitioning) advance(false);

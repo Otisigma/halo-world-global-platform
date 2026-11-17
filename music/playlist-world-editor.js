@@ -1,6 +1,7 @@
 import { WORLD_PALETTES, playlistWorld, buildPlaylistJourney, playlistCover, playlistExport } from "../lib/playlist-world.js";
 import { publicPlaylistReleases } from "../lib/personal-playlists.js";
 import { createMixSeed } from "../lib/mix-intent.js";
+import { createPlaylistTrackPreview } from "./playlist-track-preview.js";
 
 export function downloadPlaylist({ document, window, playlist, releases, format }) {
   const types = { svg: "image/svg+xml", json: "application/json", html: "text/html" };
@@ -11,7 +12,7 @@ export function downloadPlaylist({ document, window, playlist, releases, format 
   window.setTimeout(() => window.URL.revokeObjectURL(url), 1000);
 }
 
-export function mountPlaylistWorldEditor({ document, window, root, playlist, getReleases, save, report, canEdit = true }) {
+export function mountPlaylistWorldEditor({ document, window, root, playlist, getReleases, save, play, report, canEdit = true }) {
   const world = playlistWorld(playlist.world);
   const details = document.createElement("details");
   details.className = "playlist-world-editor";
@@ -94,7 +95,18 @@ export function mountPlaylistWorldEditor({ document, window, root, playlist, get
       const list = document.createElement("ol");
       for (const item of journey.tracks) {
         const node = document.createElement("li");
-        node.textContent = `${item.stage}: ${item.release.title} - ${item.release.artist}. ${item.explanation}`;
+        node.append(createPlaylistTrackPreview({
+          document, window, release: item.release, prefix: `${item.stage}: `,
+          onSelect: play ? async () => {
+            try {
+              await play({ ...playlist, releaseIds: journey.tracks.map(track => track.release.id),
+                world: playlistWorld({ ...value(), chapters: journey.chapters }) }, item.release.id);
+            } catch (error) { fail(error); }
+          } : undefined
+        }));
+        const explanation = document.createElement("p");
+        explanation.textContent = item.explanation;
+        node.append(explanation);
         list.append(node);
       }
       const apply = document.createElement("button"); apply.type = "button"; apply.textContent = "Use this order and chapters (replaces current order)";

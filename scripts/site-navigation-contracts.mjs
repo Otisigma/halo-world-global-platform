@@ -13,6 +13,26 @@ const [navigationScript, navigationStyles, musicStyles] = await Promise.all([
 ]);
 
 const networkHomepage = await read("halo.html");
+const globalChartLink = networkHomepage.match(/<a href="\/music\/#living-chart" className="halo-menu-global-charts"[\s\S]*?<\/a>/)?.[0];
+assert.ok(globalChartLink, "the main menu must lead directly to Global Charts");
+assert.match(globalChartLink, /GLOBAL CHARTS/);
+assert.match(globalChartLink, /HALO Top 20 and chart activity/);
+assert.match(globalChartLink, /aria-hidden="true"/, "decorative movement must not create screen-reader noise");
+assert.match(networkHomepage, /<a href="\/global-chart\/"[\s\S]*?<strong>CHART ARTISTS &amp; DATA<\/strong>[\s\S]*?<\/a>/,
+  "the menu exposes the separate public artist and chart-data preview");
+assert.match(navigationStyles, /@media \(prefers-reduced-motion: no-preference\)\s*\{\s*\.halo-chart-bars i \{ animation:/,
+  "decorative chart movement runs only when motion is allowed");
+for (const path of ["music/index.html", "music-upload/index.html"]) {
+  const page = await read(path);
+  assert.match(page, /<a class="global-chart-nav" href="#living-chart">Global Charts<\/a>/, `${path} has a direct chart link`);
+  assert.match(page, /<section class="chart-section" id="living-chart"/, `${path} has the matching destination`);
+  assert.match(page, /<a href="\/global-chart\/">Explore more chart artists &amp; data/, `${path} links the detailed chart snapshot`);
+  assert.match(page, /Preview votes are not submitted/, `${path} discloses the preview boundary`);
+}
+assert.match(musicStyles, /@media \(max-width: 980px\)[\s\S]*?\.site-header nav a\.global-chart-nav \{ display: inline-flex; \}/,
+  "the chart shortcut remains visible in the mobile music header");
+assert.match(musicStyles, /@media \(max-width: 480px\)[\s\S]*?\.site-header nav \{ flex-basis: 100%;/,
+  "the mobile header wraps to keep the chart shortcut usable on narrow screens");
 const mainMenu = networkHomepage.match(/<nav className="halo-site-actions"[\s\S]*?<\/nav>/)?.[0];
 assert.ok(mainMenu, "the main menu box must remain available");
 const satelliteEntry = mainMenu.match(/<a [^>]*data-stat-event="open_satellite"[\s\S]*?<\/a>/)?.[0];

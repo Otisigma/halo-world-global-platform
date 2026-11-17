@@ -4201,6 +4201,13 @@
                     <div className="halo-menu-lanes">
                       <section className="halo-menu-lane halo-menu-lane-listen" aria-labelledby="halo-lane-listen">
                         <div className="halo-menu-lane-title"><span>01</span><h3 id="halo-lane-listen">Listen &amp; Vote</h3><small>Fans &amp; Discovery</small></div>
+                        <a href="/music/#living-chart" className="halo-menu-global-charts" data-signal="HALO TOP 20">
+                          <span className="halo-chart-bars" aria-hidden="true"><i></i><i></i><i></i><i></i></span>
+                          <span><strong>GLOBAL CHARTS</strong><small>See the HALO Top 20 and chart activity</small></span>
+                        </a>
+                        <a href="/global-chart/" data-signal="PUBLIC SNAPSHOT">
+                          <Icon name="activity" className="halo-menu-icon" /><span><strong>CHART ARTISTS &amp; DATA</strong><small>Artist and track tables, rankings and export · preview</small></span>
+                        </a>
                         <button type="button" onClick={() => setShowFanGuide(true)} data-stat-event="open_fan_guide" data-stat-target="header" data-signal="ORIENTATION">
                           <Icon name="users" className="halo-menu-icon" />
                           <span><strong>NEW HERE? START HERE {renderLocalMenuStatusBadge('green', 'fan guide')}</strong><small>A two-minute map of the world</small></span>

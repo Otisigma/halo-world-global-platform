@@ -6,6 +6,8 @@ import { playlistWorld, contentAllowed } from "../lib/playlist-world.js";
 import { mountPlaylistWorldEditor } from "./playlist-world-editor.js";
 import { createPlaylistMixer } from "./playlist-mixer.js";
 import { mountCloudPlaylists } from "./playlist-cloud.js";
+import { createPlaylistTrackPreview } from "./playlist-track-preview.js";
+import { mountLocalSignal } from "./local-signal-panel.js";
 
 export function createPlaylistStudio({ document, window, root, getReleases, player, trackFor, notify }) {
   root.innerHTML = `<header><p class="section-index">Your listening world</p>
@@ -58,6 +60,8 @@ export function createPlaylistStudio({ document, window, root, getReleases, play
     report(cause.message || "Your playlists could not be saved in this browser.");
     find("[data-dialog-status]").textContent = status.textContent;
   };
+  const signal = mountLocalSignal({ document, window, root });
+  signal?.bindAudio(player.audio, () => player.track?.id);
   const queue = createPlaylistQueue({
     player, getPlaylist: id => playlists.find(item => item.id === id) || (externalPlaylist?.id === id ? externalPlaylist : null), getReleases, trackFor,
     isAllowed: (release, playlist) => contentAllowed(release, playlistWorld(playlist.world).preferences.content),
@@ -65,22 +69,24 @@ export function createPlaylistStudio({ document, window, root, getReleases, play
     onStart: () => { mixer.stop(); window.dispatchEvent(new window.CustomEvent("halo:personal-queue-start")); }
   });
   const mixer = createPlaylistMixer({
-    window, player, report,
+    window, player, report, bindSignal: (audio, getId, audible) => signal?.bindAudio(audio, getId, audible),
     onTrack: track => { find("[data-mix-track]").textContent = `Mixed playback: ${track.title} - ${track.artist}`; }
   });
   const stop = () => { queue.stop(); mixer.stop(); find("[data-mix-track]").textContent = ""; };
-  async function startPlayback(playlist) {
-    stop();
+  async function startPlayback(playlist, releaseId) {
     const preferences = playlistWorld(playlist.world).preferences;
+    const releases = publicPlaylistReleases(playlist, getReleases())
+      .filter(release => contentAllowed(release, preferences.content) && trackFor(release).src);
+    const startIndex = releaseId === undefined ? 0 : releases.findIndex(release => release.id === releaseId);
+    if (startIndex < 0) { report("This song is unavailable or excluded by your playlist content filter."); return; }
+    stop();
     if (preferences.transitions === "original" && !preferences.normalize) {
-      queue.start(playlist.id); return;
+      queue.start(playlist.id, releaseId); return;
     }
-    const tracks = publicPlaylistReleases(playlist, getReleases())
-      .filter(release => contentAllowed(release, preferences.content) && trackFor(release).src)
-      .map(release => ({ ...trackFor(release), bpm: release.bpm }));
-    const started = await mixer.start(tracks, { ...preferences, repeat: find("[data-repeat-playlist]").checked });
+    const tracks = releases.map(release => ({ ...trackFor(release), bpm: release.bpm }));
+    const started = await mixer.start(tracks, { ...preferences, startIndex, repeat: find("[data-repeat-playlist]").checked });
     if (!started && mixer.fallbackAllowed) {
-      queue.start(playlist.id);
+      queue.start(playlist.id, releaseId);
       report("Mix mode unavailable for this browser or external stream. Original playback selected explicitly as the safe fallback.");
     }
   }
@@ -198,10 +204,15 @@ export function createPlaylistStudio({ document, window, root, getReleases, play
         const release = releases.find(item => item.id === id);
         const item = document.createElement("li");
         item.dataset.releaseId = id;
-        const title = document.createElement("span");
         const chapter = playlistWorld(playlist.world).chapters.find(item => item.releaseId === id);
-        title.textContent = release ? `${chapter?.label ? `${chapter.label} / ` : ""}${release.title || "Untitled"} - ${release.artist || "Artist"}` : "Song unavailable in the current public catalog";
+        const title = release ? createPlaylistTrackPreview({
+          document, window, release, prefix: chapter?.label ? `${chapter.label} / ` : "",
+          disabled: !trackFor(release).src || !contentAllowed(release, playlistWorld(playlist.world).preferences.content),
+          onSelect: () => { if (read()) startPlayback(playlist, id).catch(error); }
+        }) : document.createElement("span");
+        if (!release) title.textContent = "Song unavailable in the current public catalog";
         const controls = document.createElement("div");
+        controls.className = "playlist-track-controls";
         controls.append(
           button("Move up", () => updatePlaylist(playlist.id, entry => movePlaylistRelease(entry, id, -1), "Song moved up."), index === 0),
           button("Move down", () => updatePlaylist(playlist.id, entry => movePlaylistRelease(entry, id, 1), "Song moved down."), index === playlist.releaseIds.length - 1),
@@ -222,6 +233,7 @@ export function createPlaylistStudio({ document, window, root, getReleases, play
       actions.append(button("Save to account (replaces your previously saved account version)", () => cloud?.saveLocal(playlist)));
       mountPlaylistWorldEditor({
         document, window, root: section, playlist, getReleases, report,
+        play: (next, releaseId) => api.playExternal(next, releaseId),
         save: next => updatePlaylist(playlist.id, () => next, "Playlist world saved. Press Play to use its listening controls.")
       });
       return section;
@@ -330,9 +342,9 @@ export function createPlaylistStudio({ document, window, root, getReleases, play
   });
   const api = {
     render, open, queue, mixer, stop,
-    playExternal: playlist => {
+    playExternal: (playlist, releaseId) => {
       externalPlaylist = { ...playlist, id: `cloud-${playlist.id}` };
-      return startPlayback(externalPlaylist);
+      return startPlayback(externalPlaylist, releaseId);
     },
     importPublic: playlist => {
       if (!read()) return;

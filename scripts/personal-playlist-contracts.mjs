@@ -6,6 +6,7 @@ import {
 } from "../lib/personal-playlists.js";
 import { mountPlaylistInspiration } from "../album-concierge/playlist-inspiration.js";
 import { createPlaylistStudio } from "../music/playlist-studio.js";
+import { createPlaylistTrackPreview } from "../music/playlist-track-preview.js";
 
 const releases = [
   { id: "one", title: "<First>", artist: "A", status: "published", src: "/one.mp3" },
@@ -17,7 +18,7 @@ const releases = [
 const playlist = { id: "journey", name: "Night drive", releaseIds: ["one", "link", "two", "hidden", "draft", "removed"] };
 const memory = () => {
   const values = new Map();
-  return { getItem: key => values.get(key) ?? null, setItem: (key, value) => values.set(key, value) };
+  return { getItem: key => values.get(key) ?? null, setItem: (key, value) => values.set(key, value), removeItem: key => values.delete(key) };
 };
 
 test("named playlists preserve the Obsidian format and report invalid storage", () => {
@@ -216,14 +217,55 @@ function studioFixture(storage = memory()) {
     CustomEvent, addEventListener(name, fn) { (windowEvents[name] ||= []).push(fn); },
     dispatchEvent(event) { for (const fn of windowEvents[event.type] || []) fn(event); }
   };
-  const played = [];
-  const player = { audio: { addEventListener() {} }, play(track) { played.push(track.id); } };
+  const played = [], audioEvents = {};
+  const player = {
+    audio: { addEventListener(name, callback) { audioEvents[name] = callback; } },
+    play(track) { this.track = track; this.status = "playing"; played.push(track.id); }
+  };
   const studio = createPlaylistStudio({
     document, window, root, getReleases: () => releases, player,
     trackFor: release => ({ ...release, src: release.src || "" })
   });
-  return { document, window, root, plus, storage, studio, played };
+  return { document, window, root, plus, storage, studio, played, audioEvents };
 }
+
+test("playlist artwork uses catalog resolution, safe text and a labelled failure placeholder", () => {
+  const { document, window } = studioFixture();
+  const release = { title: '<img src=x onerror="bad()">', artist: "<Artist>", artwork: "/cover.jpg" };
+  let preview = createPlaylistTrackPreview({ document, window, release });
+  assert.equal(preview.querySelector("img").src, "https://halo.test/cover.jpg");
+  assert.equal(preview.querySelector(".playlist-track-title").textContent, release.title);
+  assert.equal(preview.querySelector(".playlist-track-artist").textContent, release.artist);
+  assert.equal(preview.querySelectorAll("img").length, 1);
+  preview.querySelector("img").emit("error");
+  assert.equal(preview.querySelector("img").src, "/assets/releases/halo-premium-placeholder.svg");
+  assert.match(preview.querySelector("img").alt, /HALO placeholder cover/);
+  for (const artwork of ["javascript:alert(1)", "https://user:password@halo.test/a.jpg", ""]) {
+    preview = createPlaylistTrackPreview({ document, window, release: { artwork } });
+    assert.match(preview.querySelector("img").src, /halo-premium-placeholder.svg$/);
+  }
+  window.HaloReleaseArtwork = { resolve: () => ({ src: "/override.jpg" }) };
+  preview = createPlaylistTrackPreview({ document, window, release });
+  assert.equal(preview.querySelector("img").src, "https://halo.test/override.jpg");
+});
+
+test("local Signal controls stay opt-in, apply earned palettes and reset without changing playlists", () => {
+  const storage = memory();
+  writePlaylists(storage, [playlist]);
+  const { root, document } = studioFixture(storage);
+  assert.match(root.querySelector("[data-signal-status]").textContent, /^Off/);
+  root.querySelector("[data-signal-enable]").emit("click");
+  const key = "halo_local_signal_v1";
+  assert.equal(JSON.parse(storage.getItem(key)).enabled, true);
+  storage.setItem(key, JSON.stringify({ ...JSON.parse(storage.getItem(key)), best: 7 }));
+  const select = root.querySelector("[data-signal-skin]");
+  select.value = "amber"; select.emit("change");
+  assert.equal(document.body.dataset.signalSkin, "amber");
+  root.querySelector("[data-signal-reset]").emit("click");
+  assert.equal(storage.getItem(key), null);
+  assert.equal(document.body.dataset.signalSkin, "original");
+  assert.deepEqual(readPlaylists(storage), [playlist]);
+});
 
 test("song plus creates a named playlist, rejects duplicates and restores focus on close", () => {
   const fixture = studioFixture();
@@ -237,6 +279,8 @@ test("song plus creates a named playlist, rejects duplicates and restores focus 
   assert.equal(dialog.open, false);
   assert.equal(document.activeElement, plus);
   assert.deepEqual(readPlaylists(storage), [{ id: "studio-1", name: "Dream world", releaseIds: ["one"] }]);
+  assert.equal(root.querySelector(".playlist-track-title").textContent, "<First>");
+  assert.equal(root.querySelector(".playlist-track-thumb").loading, "lazy");
   assert.deepEqual(played, [], "saving a song must not interrupt or start playback");
   studio.open("one", plus);
   assert.equal(form.elements.playlist.value, "studio-1");
@@ -260,12 +304,13 @@ test("playlist management persists rename, order, removals and deletion", () => 
   assert.equal(readPlaylists(storage)[0].name, "New journey");
   world = root.querySelector(".playlist-world");
   const second = world.querySelectorAll("li")[1];
-  second.querySelector("button").focus();
-  second.querySelector("button").emit("click");
+  second.querySelector(".playlist-track-controls").querySelector("button").focus();
+  second.querySelector(".playlist-track-controls").querySelector("button").emit("click");
   assert.deepEqual(readPlaylists(storage)[0].releaseIds, ["two", "one", "hidden"]);
   assert.ok(document.activeElement.isConnected, "reordering retains a connected keyboard focus target");
   world = root.querySelector(".playlist-world");
   assert.match(world.querySelectorAll("li")[2].children[0].textContent, /unavailable/);
+  assert.equal(world.querySelectorAll("li")[2].querySelector("img"), null, "unavailable songs reveal no artwork");
   world.querySelectorAll("li")[2].querySelectorAll("button")[2].emit("click");
   assert.deepEqual(readPlaylists(storage)[0].releaseIds, ["two", "one"]);
   studio.render();
@@ -275,6 +320,50 @@ test("playlist management persists rename, order, removals and deletion", () => 
   world.querySelector(".playlist-world-actions").querySelectorAll("button")[1].emit("click");
   assert.deepEqual(readPlaylists(storage), []);
   assert.equal(studio.queue.activeId, "");
+});
+
+test("cover buttons select a song and preserve continuation, repeat and separate editing controls", () => {
+  const storage = memory();
+  writePlaylists(storage, [{ ...playlist, releaseIds: ["two", "one", "link"] }]);
+  const { root, studio, played, audioEvents } = studioFixture(storage);
+  const previews = root.querySelectorAll(".playlist-track-item");
+  assert.equal(previews[1].tagName, "BUTTON", "native buttons support Enter and Space without custom keyboard handlers");
+  assert.equal(previews[1].type, "button");
+  assert.equal(previews[1].attributes["aria-label"], "Play <First> by A");
+  assert.equal(previews[2].disabled, true, "songs without a preview cannot start playback");
+  previews[0].emit("click");
+  assert.deepEqual(played, ["two"]);
+  audioEvents.ended();
+  assert.deepEqual(played, ["two", "one"]);
+  audioEvents.ended();
+  assert.equal(studio.queue.activeId, "");
+  root.querySelector("[data-repeat-playlist]").checked = true;
+  previews[1].emit("click");
+  assert.equal(played.at(-1), "one", "selection does not restart at the first track");
+  audioEvents.ended();
+  assert.equal(played.at(-1), "two", "repeat wraps from the selected position in saved order");
+  const count = played.length;
+  root.querySelector(".playlist-track-controls").querySelectorAll("button")[2].emit("click");
+  assert.equal(played.length, count, "Remove never triggers track-selection playback");
+});
+
+test("mixed and shared selections keep the selected queue index and reject excluded songs", async () => {
+  const storage = memory();
+  const mixed = { ...playlist, releaseIds: ["one", "link", "two"], world: { preferences: { transitions: "smooth" } } };
+  writePlaylists(storage, [mixed]);
+  const { root, studio, played } = studioFixture(storage);
+  const starts = [];
+  studio.mixer.start = async (tracks, settings) => { starts.push({ tracks, settings }); return true; };
+  root.querySelectorAll(".playlist-track-item")[2].emit("click");
+  await Promise.resolve();
+  assert.deepEqual(starts[0].tracks.map(track => track.id), ["one", "two"]);
+  assert.equal(starts[0].settings.startIndex, 1, "mix index skips non-playable entries");
+  await studio.playExternal(mixed, "two");
+  assert.equal(starts[1].settings.startIndex, 1, "shared worlds use the selected track too");
+  await studio.playExternal({ ...mixed, world: { preferences: { content: "clean-only" } } }, "one");
+  assert.equal(starts.length, 2);
+  assert.deepEqual(played, []);
+  assert.match(root.querySelector("[data-playlist-status]").textContent, /excluded/);
 });
 
 test("blocked storage disables saving and does not pretend to add the song", () => {

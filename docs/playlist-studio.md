@@ -6,6 +6,14 @@ Song cards and featured chart leaders at `/music/` and `/music-upload/` have a
 **+** button. Choose a saved playlist or name a new one and add the song in one
 action. Names are 1-80 trimmed characters. Duplicate songs and case-insensitive
 duplicate names get inline feedback.
+Local, account/shared and Dreamweaver proposal tracklists show lazy-loaded,
+48-pixel cover thumbnails beside each title and artist. Artwork uses the existing
+release-artwork resolver and a labelled HALO placeholder for missing or failed
+covers. Unavailable songs never expose artwork or private catalog metadata.
+Click a cover/title row (or activate its native button with Enter/Space) to start
+at that song and continue in order, respecting repeat, content filters and the
+chosen mix style. Dreamweaver proposal previews play the proposed journey without
+saving it. Reorder/remove controls remain separate from playback.
 
 The hub creates, renames, reorders and deletes playlists and removes songs.
 **Play playlist** starts only on a user action. Original playback uses the
@@ -156,6 +164,46 @@ device buffering mean this is approximate shared listening, not sample-accurate
 multi-device audio synchronization.
 
 ## Consent-gated rewards
+
+### Optional local Signal Streak and cosmetic vault
+
+Music World, Music Upload and Obsidian share `halo_local_signal_v1` on the same
+origin. Local progress is **off by default**, separate from all existing network
+listening reports and Track Drops consent. Enable, pause and reset controls are
+available on each page. Reset removes progress and turns collection off; corrupt
+or blocked storage reports an error without replacing the saved record.
+
+A UTC day qualifies after 30 seconds of foreground, unmuted playback.
+Pause/seek/visibility transitions reset sampling; intervals above five seconds
+are discarded. Mixed decks share an elapsed-time cap and master mute is honored.
+Thirty seconds of a distinct release in the current page session adds it to the
+local exploration collection (up to 1,000 IDs); five earns Catalog Explorer.
+Three, seven and thirty consecutive days earn Signal Seeker, Resonance Holder
+and Signal Keeper. A missed UTC day resets the current streak, not earned badges.
+Three/seven-day best streaks unlock Neon Synth/Deep House Amber; 60 accumulated
+minutes unlock Obsidian Dark. Palettes recolor the panel and player accents, not
+the audio. No animation, notifications or autoplay is triggered by a milestone.
+
+Only IDs, bounded progress and a palette choice are stored locally. Other users
+of this browser profile can see/reset it. Device-clock changes, storage edits and
+concurrent tabs make this **unverified personal progress**, not evidence of
+listening. It is not uploaded, exported as proof, merged across devices, or used
+for balances, access control or eligibility. Existing optional network reporting
+remains governed by its own consent controls; local opt-in never enables it.
+
+There are no private-track/stem unlocks, Golden Ticket codes, snapshot hashes,
+giveaway entries or merchandise promises in this rollout. Browser-generated
+hashes cannot prove listening or enforce scarce access. Genuine drops require an
+artist-approved asset and server authorization; giveaways additionally need
+published eligibility/rules, valid consent and server-validated single-use claims.
+
+Generate the current artwork implementation guide with
+`npm run docs:playlist-art -- /absolute/existing/output/directory`. This writes
+`halo_playlist_art_spec.html` and `halo_playlist_art_spec.pdf` using the existing
+`pdf-lib` dependency, with actual rendering/CSS code and accessibility/privacy
+notes. No Python environment or new PDF dependency is required.
+
+### Verified account curator milestones
 
 Local curator labels remain non-spendable progress: 1 song / First spark, 5 songs
 / Journey builder, 10 songs from 3 named artists / World selector. These can fall

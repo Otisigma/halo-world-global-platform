@@ -682,6 +682,24 @@
   justify-self: center;
 }
 
+.halo-menu-lane > a.halo-menu-global-charts {
+  border-color: rgba(215, 170, 94, .6);
+  background: rgba(215, 170, 94, .1);
+}
+.halo-menu-global-charts strong { color: #ffe4a3; }
+.halo-chart-bars { display: flex; align-items: end; justify-content: center; gap: 2px; width: 24px; height: 20px; justify-self: center; }
+.halo-chart-bars i { width: 3px; height: 50%; background: #e8b865; border-radius: 2px; transform-origin: bottom; }
+.halo-chart-bars i:nth-child(2) { height: 85%; }
+.halo-chart-bars i:nth-child(3) { height: 65%; }
+.halo-chart-bars i:nth-child(4) { height: 100%; }
+@media (prefers-reduced-motion: no-preference) {
+  .halo-chart-bars i { animation: halo-chart-tick 1.8s ease-in-out infinite alternate; }
+  .halo-chart-bars i:nth-child(2) { animation-delay: -.6s; }
+  .halo-chart-bars i:nth-child(3) { animation-delay: -1.1s; }
+  .halo-chart-bars i:nth-child(4) { animation-delay: -.3s; }
+  @keyframes halo-chart-tick { from { transform: scaleY(.55); } to { transform: scaleY(1); } }
+}
+
 .halo-menu-lane strong,
 .halo-menu-lane small {
   display: block;

@@ -22,6 +22,13 @@
 .playlist-world ol { padding-left: 24px; }
 .playlist-world li { padding: 16px 0; border-bottom: 1px solid var(--line); overflow-wrap: anywhere; }
 .playlist-world li > div { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
+.playlist-world li > .playlist-track-item { display: flex; flex-wrap: nowrap; align-items: center; gap: 12px; padding: 10px 14px; margin-top: 0; width: 100%; min-width: 0; text-align: left; border-radius: 6px; transition: background-color .2s ease; }
+.playlist-world li > .playlist-track-item:not(:disabled):hover { background-color: var(--line); }
+.playlist-track-thumb { width: 48px; height: 48px; border-radius: 6px; object-fit: cover; flex-shrink: 0; background-color: var(--ink); border: 1px solid var(--line); }
+.playlist-track-info { display: flex; flex-direction: column; min-width: 0; overflow: hidden; }
+.playlist-track-title { font-weight: 600; color: var(--paper); font-size: .95rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.playlist-track-artist { color: var(--muted); font-size: .825rem; overflow-wrap: anywhere; }
+@media (prefers-reduced-motion: reduce) { .playlist-world li > .playlist-track-item { transition: none; } }
 .playlist-level-up { margin-top: 32px; border-top: 1px solid var(--line); }
 .playlist-studio dialog { width: min(520px, calc(100% - 32px)); max-height: calc(100dvh - 32px); overflow-y: auto; padding: 28px; border: 1px solid var(--acid); color: var(--paper); background: var(--ink-soft); }
 .playlist-studio dialog::backdrop { background: rgba(0, 0, 0, .8); }

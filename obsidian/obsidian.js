@@ -1,5 +1,6 @@
 import { parseTimestampedLyrics, findActiveLyricIndex } from "../lib/dreamweaver-lyrics.js";
 import { readPlaylists, writePlaylists } from "../lib/personal-playlists.js";
+import { mountLocalSignal } from "../music/local-signal-panel.js";
 
 export function eligibleReleases(data) {
   if (!Array.isArray(data?.releases)) throw new Error("The catalog response is invalid.");
@@ -60,6 +61,8 @@ export function createGateway({ document, window, fetcher }) {
   const loadNoteText = loadNote.textContent;
   let lyrics = [], lyricNodes = [], activeLyric = -1;
   const telemetry = window.HaloListeningTelemetry?.bindAudio(audio, () => state.releases[state.index]?.id);
+  const signalRoot = get("localSignal");
+  if (signalRoot) mountLocalSignal({ document, window, root: signalRoot })?.bindAudio(audio, () => state.releases[state.index]?.id);
   const selected = () => state.releases[state.index];
   const setStatus = value => { status.textContent = value; };
   let playlistStorage;

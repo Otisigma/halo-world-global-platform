@@ -25,6 +25,7 @@
   <link rel="stylesheet" href="/release-artwork.css">
   <link rel="stylesheet" href="/music/music.css">
   <link rel="stylesheet" href="/music/playlist-studio.css">
+  <link rel="stylesheet" href="/music/local-signal.css">
   <link rel="stylesheet" href="/music/signal-map.css">
   <link rel="stylesheet" href="/halo-hud.css">
 </head>
@@ -38,6 +39,8 @@
     </a>
     <nav aria-label="Music catalog navigation">
       <a href="/halo">World</a>
+      <a class="global-chart-nav" href="#living-chart">Global Charts</a>
+      <a href="/discover/">Discover</a>
       <a href="/dj-deck.html">DJ Deck</a>
       <a href="/mixes/">HALO X Mixes</a>
       <a href="/obsidian/">Obsidian Gateway</a>
@@ -70,7 +73,7 @@
     </section>
 
     <halo-video-discovery id="video-discovery" surface="music"></halo-video-discovery>
-    <section class="chart-section" aria-labelledby="chartTitle">
+    <section class="chart-section" id="living-chart" aria-labelledby="chartTitle">
       <header class="chart-header">
         <div>
           <p class="section-index">02 / The living chart</p>
@@ -79,16 +82,25 @@
         <div class="chart-intro">
           <p>A Top 20 of HALO’s published releases with recorded activity, using listening clicks, release-room opens, and momentum. Explore catalog opens up to 20 eligible releases, including songs awaiting their first signal. This is a transparent HALO activity chart—not an industry sales chart. Counts reflect the latest catalog response, not a real-time feed.</p>
           <div class="chart-window"><span class="live-dot" aria-hidden="true"></span><strong>Rolling 7 days</strong><span>Compared with the previous 7</span></div>
+          <p>Choose an artist below to explore their release and its Signal Orbit. <a href="/global-chart/">Explore more chart artists &amp; data ↗</a> · Public snapshot of up to 50 chart entries. Preview votes are not submitted.</p>
         </div>
       </header>
 
-      <div class="chart-rooms" id="chartRooms" aria-label="Choose a chart room" data-halo-guide="Chart rooms filter by genre. Eligible published releases with recorded listening clicks or release-room opens can appear in the ranking." data-halo-guide-title="Chart rooms">
+      <div class="chart-rooms" id="chartRooms" aria-label="Choose a genre gateway or supplemental room" data-halo-guide="HALO Music World is an independent multi-genre music platform. Choose an equal genre gateway or a specialist room. Signal rankings use eligible published releases with recorded listening clicks or release-room opens over the rolling seven-day window, compared with the previous seven days." data-halo-guide-title="Independent multi-genre rooms">
         <button type="button" data-chart-room="all" aria-pressed="true">All signal</button>
-        <button type="button" data-chart-room="hip-hop">Hip-Hop / Rap</button>
-        <button type="button" data-chart-room="rnb">R&amp;B / Soul</button>
-        <button type="button" data-chart-room="dance">House / Dance</button>
-        <button type="button" data-chart-room="gospel">Gospel / Inspirational</button>
-        <button type="button" data-chart-room="global">Afrobeats / Global</button>
+        <a class="genre-gateway-link" href="/discover/#electronic-deep-house">Discover artists &amp; releases</a>
+        <button type="button" data-chart-room="dance">Electronic &amp; Deep House</button>
+        <button type="button" data-chart-room="global" data-halo-guide="HALO Music World is an independent multi-genre music platform. This room features Afrobeats and global sounds, ranked by recent 7-day listener activity. Explore the main catalog for electronic dance music, deep house, ambient works, and more." data-halo-guide-title="Afrobeats &amp; Global Sounds">Afrobeats &amp; Global Sounds</button>
+        <button type="button" data-chart-room="ambient">Ambient &amp; Experimental</button>
+        <button type="button" data-chart-room="rock-alternative">Rock &amp; Alternative</button>
+        <details class="chart-specialist-rooms">
+          <summary>More genre rooms</summary>
+          <div role="group" aria-label="Specialist genre rooms">
+            <button type="button" data-chart-room="hip-hop">Hip-Hop / Rap</button>
+            <button type="button" data-chart-room="rnb">R&amp;B / Soul</button>
+            <button type="button" data-chart-room="gospel">Gospel / Inspirational</button>
+          </div>
+        </details>
       </div>
 
       <div class="chart-sort-row" id="chartSortButtons" role="group" aria-label="Chart ranking or catalog discovery" data-halo-guide="Activity rankings show up to 20 releases. Explore catalog includes eligible songs without activity, newest first, without assigning chart ranks." data-halo-guide-title="Chart and discovery">
@@ -195,6 +207,7 @@
   <script src="/listening-telemetry.js" defer></script>
   <script src="/music/return-celebration.js" defer></script>
   <script src="/music/audioPreloader.js" defer></script>
+  <script src="/music/genre-rooms.js" defer></script>
   <script src="/music/music.js" defer></script>
   <script src="/music/featuredPlayer.js" defer></script>
   <link rel="stylesheet" href="/video-discovery.css">

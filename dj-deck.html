@@ -374,12 +374,13 @@
     .recording-copy, .recording-actions { position: relative; z-index: 1; }
     .recorder-guard { grid-column: 1 / -1; position: relative; z-index: 1; display: flex; align-items: flex-start; gap: 11px; border: 1px solid rgba(200,255,54,.34); background: rgba(8,10,9,.86); padding: 11px 14px; color: var(--acid); transition: border-color .18s, background .18s, color .18s; }
     .recorder-guard svg { width: 18px; height: 18px; flex-shrink: 0; margin-top: 1px; }
-    .recorder-guard .recorder-guard-alert, .recorder-guard.is-triggered .recorder-guard-shield { display: none; }
-    .recorder-guard.is-triggered .recorder-guard-alert { display: block; }
+    .recorder-guard .recorder-guard-alert, .recorder-guard.is-triggered .recorder-guard-shield, .recorder-guard.is-pending .recorder-guard-shield { display: none; }
+    .recorder-guard.is-triggered .recorder-guard-alert, .recorder-guard.is-pending .recorder-guard-alert { display: block; }
     .recorder-guard h3 { margin: 0; font: 500 9px "DM Mono", monospace; letter-spacing: .12em; text-transform: uppercase; }
     .recorder-guard p { margin: 4px 0 0; color: #aeb7ab; font-size: 11px; line-height: 1.45; }
     .recorder-guard.is-triggered { border-color: rgba(255,105,72,.62); background: rgba(255,105,72,.08); color: #ff8b6f; animation: recorderGuardAlert .9s ease-in-out infinite alternate; }
     .recorder-guard.is-triggered p { color: #ffd2c6; }
+    .recorder-guard.is-pending { border-color: rgba(174,183,171,.34); color: #aeb7ab; }
     @media (prefers-reduced-motion: reduce) { .recorder-guard.is-triggered { animation: none; } }
     .recording-heading { display: flex; align-items: center; gap: 10px; }
     .recording-heading h2 { margin: 0; font-size: clamp(19px, 2vw, 27px); letter-spacing: -.04em; }

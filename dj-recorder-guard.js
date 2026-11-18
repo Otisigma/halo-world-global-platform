@@ -28,17 +28,109 @@
     return `Deck ${list.join(" and Deck ")}`;
   }
 
+  class IsolatedFeed {
+    constructor(context, masterLimiter) {
+      this.context = context;
+      this.gain = context.createGain();
+      this.gain.gain.setValueAtTime(0.82, context.currentTime);
+      this.limiter = context.createDynamicsCompressor();
+      for (const parameter of ["threshold", "knee", "ratio", "attack", "release"]) {
+        const value = masterLimiter[parameter].value;
+        this.limiter[parameter].setValueAtTime(value, context.currentTime);
+      }
+      this.destination = context.createMediaStreamDestination();
+      this.channelSplitter = context.createChannelSplitter(2);
+      this.analyser = context.createAnalyser();
+      this.rightAnalyser = context.createAnalyser();
+      this.analyser.fftSize = 2048;
+      this.rightAnalyser.fftSize = 2048;
+      context.createMediaStreamSource(this.destination.stream).connect(this.channelSplitter);
+      this.channelSplitter.connect(this.analyser, 0);
+      this.channelSplitter.connect(this.rightAnalyser, 1);
+      this.gain.connect(this.limiter);
+      this.limiter.connect(this.destination);
+      this.musicSources = new Set();
+    }
+
+    connectMusicSource(source) {
+      if (!source || this.musicSources.has(source)) return;
+      source.connect(this.gain);
+      this.musicSources.add(source);
+    }
+
+    async preflight(readRouting) {
+      const validate = (checkSourceRoutes = true) => {
+        const tracks = this.destination.stream?.getAudioTracks?.() || [];
+        if (this.context.state !== "running" || !tracks.length
+          || tracks.some(track => track.readyState !== "live" || track.enabled === false || track.muted)) {
+          throw new Error("The recorder feed is not in an isolated state.");
+        }
+        if (Array.isArray(this.gain.connections)
+          && (this.gain.connections.length !== 1 || this.gain.connections[0] !== this.limiter)) {
+          throw new Error("Recorder routing changed during isolation preflight.");
+        }
+        if (Array.isArray(this.limiter.connections)
+          && (this.limiter.connections.length !== 1 || this.limiter.connections[0] !== this.destination)) {
+          throw new Error("Recorder routing changed during isolation preflight.");
+        }
+        const routing = readRouting?.();
+        const sources = [...new Set(routing?.sources || [])];
+        const forbiddenNodes = routing?.forbiddenNodes || [];
+        if (!sources.length || sources.some(source => !this.musicSources.has(source)
+          || forbiddenNodes.includes(source))) {
+          throw new Error("The recorder feed is not in an isolated state.");
+        }
+        if (checkSourceRoutes && sources.some(source =>
+          Array.isArray(source.connections) && !source.connections.includes(this.gain))) {
+          throw new Error("Recorder routing changed during isolation preflight.");
+        }
+        return { sources, forbiddenNodes };
+      };
+
+      const initialRouting = validate();
+      const detachedSources = [];
+      try {
+        for (const source of initialRouting.sources) {
+          source.disconnect(this.gain);
+          detachedSources.push(source);
+        }
+
+        const samples = [
+          new Float32Array(this.analyser.fftSize),
+          new Float32Array(this.rightAnalyser.fftSize)
+        ];
+        for (let window = 0; window < 4; window += 1) {
+          await Promise.resolve();
+          validate(false);
+          this.analyser.getFloatTimeDomainData(samples[0]);
+          this.rightAnalyser.getFloatTimeDomainData(samples[1]);
+          if (samples.some(channel => channel.some(sample => !Number.isFinite(sample) || Math.abs(sample) >= 0.0001))) {
+            throw new Error("Recorder quiet-feed preflight detected unexpected audio.");
+          }
+        }
+
+        const finalRouting = validate(false);
+        if (finalRouting.sources.length !== initialRouting.sources.length
+          || finalRouting.sources.some(source => !initialRouting.sources.includes(source))
+          || finalRouting.forbiddenNodes.length !== initialRouting.forbiddenNodes.length
+          || finalRouting.forbiddenNodes.some(node => !initialRouting.forbiddenNodes.includes(node))) {
+          throw new Error("Recorder routing changed during isolation preflight.");
+        }
+      } finally {
+        for (const source of detachedSources) source.connect(this.gain);
+      }
+    }
+  }
+
   function evaluateRecorderGuard(inputs = {}, config = {}) {
-    const settings = { ...DEFAULT_CONFIG, ...config };
     const isRecording = Boolean(inputs.isRecording);
+    const isolationVerified = Boolean(inputs.isolationVerified);
+    const isolationError = typeof inputs.isolationError === "string" ? inputs.isolationError.trim() : "";
     const cueBusActive = Boolean(inputs.cueBusActive);
     const masterBusLevel = clampLevel(inputs.masterBusLevel);
     const activeCueDecks = Array.isArray(inputs.activeCueDecks) ? inputs.activeCueDecks.slice() : [];
-    const nearLimit = masterBusLevel > settings.masterLimit;
-    const levelPercent = Math.round(masterBusLevel * 100);
-    const bleedRisk = isRecording && cueBusActive && nearLimit;
 
-    if (bleedRisk) {
+    if (isolationError) {
       return {
         state: "triggered",
         isSecureToRecord: false,
@@ -48,19 +140,30 @@
         masterBusLevel,
         activeCueDecks,
         title: TRIGGERED_TITLE,
-        warningMessage: `CUE monitoring on ${deckList(activeCueDecks)} is active while the master bus is near its limit (${levelPercent}%). Release CUE or pull the channel faders down so headphone bleed and feedback stay out of the recording.`
+        warningMessage: isolationError
       };
     }
 
-    let message;
-    if (!isRecording) {
-      message = "The recorder taps the post-limiter master bus only; CUE headphones stay on a separate local path. The guard watches for likely bleed conditions once recording starts.";
-    } else if (cueBusActive) {
-      message = `Recording the master bus. CUE on ${deckList(activeCueDecks)} stays on the local monitor path — keep the master below its limit to avoid headphone bleed.`;
-    } else {
-      message = "Recording the master bus only. No likely cue-bleed or feedback conditions detected.";
+    if (!isolationVerified) {
+      return {
+        state: "pending",
+        isSecureToRecord: false,
+        bleedDetected: false,
+        isRecording,
+        cueBusActive,
+        masterBusLevel,
+        activeCueDecks,
+        title: "Recorder isolation pending",
+        warningMessage: "",
+        message: "Recorder isolation has not been verified by the quiet-feed preflight."
+      };
     }
 
+    const message = isRecording
+      ? cueBusActive
+        ? `Recording the verified isolated music feed. CUE stays monitor-only on ${deckList(activeCueDecks)}.`
+        : "Recording the verified isolated music feed."
+      : "Recorder isolation is verified. The music feed is ready to record.";
     return {
       state: "secure",
       isSecureToRecord: true,
@@ -143,19 +246,23 @@
 
   function renderRecorderGuardIndicator(element, state) {
     if (!element || !state) return;
-    const secure = state.state !== "triggered";
-    element.dataset.state = secure ? "secure" : "triggered";
+    const secure = state.state === "secure";
+    const triggered = state.state === "triggered";
+    const pending = state.state === "pending";
     element.classList?.toggle?.("is-secure", secure);
-    element.classList?.toggle?.("is-triggered", !secure);
-    element.setAttribute?.("role", secure ? "status" : "alert");
-    element.setAttribute?.("aria-live", secure ? "polite" : "assertive");
+    element.classList?.toggle?.("is-triggered", triggered);
+    element.classList?.toggle?.("is-pending", pending);
+    element.dataset.state = state.state;
+    element.setAttribute?.("role", triggered ? "alert" : "status");
+    element.setAttribute?.("aria-live", triggered ? "assertive" : "polite");
     const title = element.querySelector?.("[data-recorder-guard-title]");
     const message = element.querySelector?.("[data-recorder-guard-message]");
-    if (title) title.textContent = state.title || (secure ? SECURE_TITLE : TRIGGERED_TITLE);
-    if (message) message.textContent = secure ? (state.message || "") : state.warningMessage;
+    if (title) title.textContent = state.title || (triggered ? TRIGGERED_TITLE : pending ? "Recorder isolation pending" : SECURE_TITLE);
+    if (message) message.textContent = triggered ? state.warningMessage : (state.message || "");
   }
 
   global.HaloRecorderGuard = HaloRecorderGuard;
+  global.HaloRecorderGuard.IsolatedFeed = IsolatedFeed;
   global.HaloRecorderGuard.evaluate = evaluateRecorderGuard;
   global.HaloRecorderGuard.renderIndicator = renderRecorderGuardIndicator;
   global.useRecorderGuard = useRecorderGuard;

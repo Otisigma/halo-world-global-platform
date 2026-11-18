@@ -233,6 +233,43 @@
 
     .facet-copy[data-changing="true"] { animation: facet-shift .45s ease both; }
 
+    .signal-banner {
+      display: block;
+      margin-top: 1.6rem;
+      border: 1px solid rgba(207, 167, 106, .4);
+      background: #171410;
+      color: var(--ink);
+      text-decoration: none;
+      overflow: hidden;
+      transition: border-color .25s ease, transform .25s ease;
+    }
+
+    .signal-banner-art { display: block; overflow: hidden; }
+    .signal-banner-art img { display: block; width: 100%; height: auto; }
+    .signal-banner-mobile { display: none; }
+    .signal-banner-action {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      min-height: 3rem;
+      padding: .85rem 1.1rem;
+      border-top: 1px solid rgba(207, 167, 106, .25);
+      color: #e4c58e;
+      font-size: .7rem;
+      letter-spacing: .08em;
+    }
+    .signal-banner:hover { border-color: var(--ember); transform: translateY(-.2rem); }
+    .signal-banner:active { transform: translateY(0); }
+    .signal-banner:focus-visible { outline: 2px solid var(--ember); outline-offset: .3rem; }
+
+    @media (max-width: 600px) {
+      .signal-banner-art { height: 12rem; }
+      .signal-banner-art img { height: 100%; object-fit: cover; object-position: right center; width: 100%; }
+      .signal-banner-mobile { display: block; padding: 1.2rem; }
+      .signal-banner-mobile strong { display: block; color: #e4c58e; font: 400 2.6rem/1 "Instrument Serif", Georgia, serif; }
+      .signal-banner-mobile p { margin: .8rem 0 0; font-size: .7rem; line-height: 1.7; color: var(--ink); }
+    }
+
     .release-feature {
       position: relative;
       display: grid;
@@ -694,6 +731,18 @@
           </div>
           <p class="facet-copy" id="facet-copy">Take a record from unfinished idea to a release-ready world.</p>
         </div>
+
+        <a class="signal-banner" href="https://halo-world-global-platform.netlify.app/obsidian/" aria-label="Enter the signal. Explore the music in Obsidian.">
+          <picture class="signal-banner-art">
+            <source media="(max-width: 600px)" srcset="/assets/enter-the-signal-mobile.webp">
+            <img src="/assets/enter-the-signal.webp" alt="Enter the signal. HALO Music World — a saxophonist in black and gold." width="1024" height="434" decoding="async">
+          </picture>
+          <span class="signal-banner-mobile" aria-hidden="true">
+            <strong>Enter the signal.</strong>
+            <p>Listen to available previews, explore artist-approved links, and follow the music into the HALO catalog.</p>
+          </span>
+          <span class="signal-banner-action">Explore the music <span aria-hidden="true">→</span></span>
+        </a>
 
         <a class="release-feature" href="/global-chart/" aria-label="Explore the Global Living Chart preview">
           <span class="release-art" aria-hidden="true" style="background:#102022;display:flex;align-items:center;justify-content:center;color:#d9e9cf;font-size:3rem;font-family:'Barlow Condensed',sans-serif;">↗</span>

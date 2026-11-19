@@ -7,6 +7,7 @@ import { loadOwnerSignups } from "../lib/owner-signups.mjs";
 import { cleanMemberId, loadOwnerMemberActivity, loadOwnerMemberDirectory } from "../lib/owner-member-activity.mjs";
 import { loadOwnerOutcomes } from "../lib/owner-outcomes.mjs";
 import { buildRunnerBriefing, loadStoredBriefings } from "../lib/runner-briefing.mjs";
+import { buildShopBlueprint } from "../lib/shop-blueprint.mjs";
 
 function json(body, status = 200, headers = {}) {
   return Response.json(body, { status, headers: { "Cache-Control": "private, no-store", ...headers } });
@@ -38,6 +39,10 @@ export default async function haloControlCenterHandler(request) {
         coverage: item.briefing?.coverage || null, leverageMoves: item.briefing?.leverageMoves || []
       })) ?? null;
       return json({ briefing, history });
+    }
+    if (view === "shop-blueprint") {
+      if (request.method !== "GET") return json({ message: "The shop blueprint is read-only" }, 405, { Allow: "HEAD, GET" });
+      return json({ blueprint: await buildShopBlueprint(getDatabase()) });
     }
     if (view === "members" || view === "member") {
       if (request.method !== "GET") return json({ message: "Member activity review is read-only" }, 405, { Allow: "HEAD, GET" });

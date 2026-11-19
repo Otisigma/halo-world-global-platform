@@ -1,0 +1,21 @@
+import assert from "node:assert/strict";
+import { buildRunnerBriefing, ukHour, ukDate } from "../netlify/lib/runner-briefing.mjs";
+const db = { async sql(strings, ...values) {
+  const q = strings.join("?");
+  assert.doesNotMatch(q, /\b(INSERT|UPDATE|DELETE)\b/);
+  if (q.includes("halo_creator_passes")) throw new Error("missing");
+  if (q.includes("halo_artist_pro_leads")) return [{ day: 1, week: 3, awaiting_review: 2 }];
+  if (q.includes("maintenance_issues") && q.includes("severity IN")) return [{ title: "Checkout 500", severity: "critical", category: "payments", page_path: "/music/", occurrence_count: 4, last_seen_at: new Date() }];
+  if (q.includes("halo_retained_master_snapshots")) return [{ ready: 5, failed: 1, stalled: 0, in_progress: 0 }];
+  if (q.includes("FROM halo_support_requests") && q.includes("title, status, vote_count")) return [{ title: "Split payouts", status: "planned", vote_count: 9 }];
+  return [];
+}};
+const b = await buildRunnerBriefing(db, { now: new Date("2026-11-19T08:00:00Z") });
+assert.equal(b.pillars.payments.creatorPasses.status, "unavailable");
+assert.equal(b.pillars.signups.artists.data.awaitingReview, 2);
+assert.equal(b.leverageMoves.length, 3);
+assert.match(b.leverageMoves[0].title, /critical/);
+assert.equal(ukHour(new Date("2026-11-19T08:00:00Z")), 8);
+assert.equal(ukHour(new Date("2026-07-19T07:00:00Z")), 8);
+assert.equal(ukDate(new Date("2026-11-19T08:00:00Z")), "2026-11-19");
+console.log("runner briefing contracts passed");

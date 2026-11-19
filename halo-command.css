@@ -339,3 +339,10 @@ footer { min-height: 92px; display: flex; justify-content: space-between; align-
   .maintenance-checks { grid-template-columns: 1fr; }
   footer { display: grid; }
 }
+.blueprint-items h3 { line-height: 1.25; }
+.blueprint-stage { display: inline-block; margin: 0 0 12px; padding: 3px 10px; border: 1px solid var(--line-strong); font-family: var(--mono); font-size: 0.75rem; letter-spacing: 0.08em; text-transform: uppercase; }
+.blueprint-stage[data-stage="live"] { color: var(--paper-soft); border-color: currentColor; font-weight: 700; }
+.blueprint-items h4 { margin: 14px 0 6px; font-size: 0.8rem; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); }
+.blueprint-items ol, .blueprint-items ul { padding-left: 20px; line-height: 1.6; margin: 0; }
+.blueprint-surfaces { display: flex; flex-wrap: wrap; gap: 8px; margin: 0; padding: 0; list-style: none; }
+.blueprint-surfaces a { color: inherit; }

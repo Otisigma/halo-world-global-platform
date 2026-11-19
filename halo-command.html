@@ -37,6 +37,7 @@
   <script src="/owner-member-activity.js" defer></script>
   <script src="/owner-outcomes.js" defer></script>
   <script src="/runner-briefing.js" defer></script>
+  <script src="/shop-blueprint.js" defer></script>
   <script src="/dreamweaver-oracle.js" defer></script>
 </head>
 <body>
@@ -122,6 +123,17 @@
         <div id="runnerBriefingPillars" class="report-grid runner-pillars"></div>
         <details class="runner-history"><summary>Saved morning briefings</summary><ul id="runnerBriefingHistory"></ul></details>
         <ul id="runnerBriefingGaps" class="runner-gaps"></ul>
+      </section>
+
+      <section id="shopBlueprint" class="maintenance-section" aria-labelledby="shopBlueprintTitle" hidden>
+        <div class="section-heading">
+          <div><p class="section-label">OWNER-ONLY / WORKING LIST</p><h2 id="shopBlueprintTitle" tabindex="-1">Artist Shop + Video + AI Blueprint</h2></div>
+          <button id="shopBlueprintRefresh" type="button">Refresh blueprint</button>
+        </div>
+        <p>The eight-item working list for levelling up the HALO shop against streaming. Each item shows its live readiness from platform records, what it already builds on, the ordered build tasks and what runners report at each check-in. Sources that can't be read show as unavailable, never as zero.</p>
+        <p id="shopBlueprintStatus" role="status">Owner access required.</p>
+        <div id="shopBlueprintNext" class="runner-moves"></div>
+        <div id="shopBlueprintItems" class="report-grid runner-pillars blueprint-items"></div>
       </section>
 
       <section class="control-deck" aria-labelledby="controlDeckTitle">

@@ -1296,6 +1296,8 @@
               return <svg {...props}><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>;
             case 'file-video':
               return <svg {...props}><path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"/><polyline points="14 2 14 8 20 8"/><path d="m10 11 5 3-5 3v-6z"/></svg>;
+            case 'shopping-bag':
+              return <svg {...props}><path d="M6 2 3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z"/><line x1="3" y1="6" x2="21" y2="6"/><path d="M16 10a4 4 0 0 1-8 0"/></svg>;
             case 'upload':
               return <svg {...props}><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>;
             case 'folder':
@@ -1459,6 +1461,7 @@
           { route: '/release-house/', label: 'RELEASE HOUSE' },
           { route: '/song-catalog/', label: 'SONG CATALOG' },
           { route: '/music-upload/', label: 'HALO SHOP' },
+          { route: '/artist-shop/', label: 'ARTIST SHOP' },
           { route: '/dreamweaver/', label: 'DREAMWEAVER EXPERIENCE' },
           { route: '/dreamweaver-lab/', label: 'DREAMWEAVER SONG LAB' },
           { route: '/album-concierge/', label: 'CREATE YOUR ALBUM' },
@@ -4328,6 +4331,9 @@
                         </a>
                         <a href="/music-upload/" data-stat-event="open_song_catalog_upload" data-stat-target="header" data-signal="HALO SHOP">
                           <Icon name="upload" className="halo-menu-icon" /><span><strong>HALO SHOP {renderMenuStatusBadge('/music-upload/', 'HALO Shop')}</strong><small>Public song shop for listening, buying, sharing, and artist-controlled release context</small></span>
+                        </a>
+                        <a href="/artist-shop/" aria-current={menuStatusForRoute('/artist-shop/', 'green').isCurrent ? 'page' : undefined} data-stat-event="open_artist_shop" data-stat-target="header" data-signal="ARTIST STOREFRONTS">
+                          <Icon name="shopping-bag" className="halo-menu-icon" /><span><strong>ARTIST SHOP {renderMenuStatusBadge('/artist-shop/', 'Artist Shop')}</strong><small>Shop artist storefronts: DJ tools, stems, masters, classes, and reviews</small></span>
                         </a>
                         <a href="/dreamweaver-lab/" data-stat-event="open_dreamweaver_song_lab" data-stat-target="header" data-signal="AUDIO TO CAMPAIGN">
                           <Icon name="music" className="halo-menu-icon" /><span><strong>DREAMWEAVER SONG LAB {renderMenuStatusBadge('/dreamweaver-lab/', 'Dreamweaver Song Lab')}</strong><small>Load a recording. Analyze the wave. Build the release world.</small></span>

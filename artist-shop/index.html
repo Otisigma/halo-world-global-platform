@@ -1,0 +1,172 @@
+<!DOCTYPE html>
+<html lang="en-GB">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>HALO Artist Shop — Artist Storefronts</title>
+  <meta name="description" content="Browse HALO artist storefronts: DJ tools, stems, masters, classes, and reviews, direct from the creator.">
+  <meta name="theme-color" content="#11100d">
+  <link rel="manifest" href="/app.webmanifest">
+  <link rel="apple-touch-icon" href="/assets/halo-app-icon-180.png">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="HALO">
+  <meta property="og:title" content="HALO Artist Shop">
+  <meta property="og:description" content="Premium music, stems, knowledge, and access—direct from the creator.">
+  <meta property="og:type" content="website">
+  <meta property="og:site_name" content="HALO Music World">
+  <meta property="og:image" content="https://halo-world-global-platform.netlify.app/assets/halo-app-icon-512.png">
+  <meta property="og:image:width" content="512">
+  <meta property="og:image:height" content="512">
+  <meta property="og:image:alt" content="HALO Music World logo">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:image" content="https://halo-world-global-platform.netlify.app/assets/halo-app-icon-512.png">
+  <meta name="twitter:image:alt" content="HALO Music World logo">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Archivo+Black&family=DM+Mono:wght@300;400;500&family=Instrument+Serif:ital@0;1&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/halo-brand.css">
+  <link rel="stylesheet" href="/creators/marketplace.css">
+  <link rel="canonical" href="https://halo-world-global-platform.netlify.app/artist-shop/">
+  <script src="/stats.js" defer></script>
+  <script src="/site-monitor.js" defer></script>
+  <link rel="stylesheet" href="/accessibility.css">
+  <script src="/accessibility.js" defer></script>
+  <link rel="stylesheet" href="/mobile-navigation.css">
+  <script src="/mobile-navigation.js" defer></script>
+  <script src="/identity.js" type="module"></script>
+  <script src="/creators/marketplace.js" defer></script>
+</head>
+<body>
+  <a class="skip-link" href="#catalog">Skip to the shop</a>
+  <div class="grain" aria-hidden="true"></div>
+
+  <header class="site-header">
+    <a class="wordmark" href="/halo" aria-label="Return to HALO home">
+      <img class="halo-brand-image" src="/assets/halo-logo-mark.webp" alt="">
+      <span>HALO</span>
+      <small>Artist Shop</small>
+    </a>
+    <nav class="primary-nav" aria-label="Artist Shop navigation">
+      <a href="#artists">Artists</a>
+      <a href="#catalog">Drops</a>
+      <a href="/music-upload/">HALO Shop</a>
+      <a href="/creators/">Creator World</a>
+      <a href="/creators/#money-model">How money works</a>
+    </nav>
+    <div class="header-actions">
+      <button class="text-button" id="auth-button" type="button">Join / sign in</button>
+      <a class="home-link" href="/halo">Main HALO <span aria-hidden="true">↗</span></a>
+    </div>
+  </header>
+
+  <main>
+    <aside class="prototype-notice" aria-label="Artist Shop preview status">
+      <div class="prototype-stamp">
+        <span>Current status</span>
+        <strong>Conversation only</strong>
+      </div>
+      <p>This is a working preview of an idea. No artist has signed away rights, been charged, or had work put on sale through this page. Nothing moves forward without the artist seeing and agreeing to the terms first.</p>
+      <a href="/creators/#money-model">See the proposed money model <span aria-hidden="true">↓</span></a>
+    </aside>
+
+    <section class="artists-section" id="artists" aria-labelledby="artists-title">
+      <div class="section-heading">
+        <div>
+          <p class="section-number">01 / Artist Shop</p>
+          <h2 id="artists-title">Artist storefronts.</h2>
+        </div>
+        <p class="section-note">Concept profiles demonstrate the launch experience. Final artists enter after approval and rights review.</p>
+      </div>
+      <div class="artist-stage">
+        <div class="artist-feature" id="artist-feature" aria-live="polite">
+          <div class="artist-feature-skeleton"></div>
+        </div>
+        <div class="artist-list" id="artist-list" aria-label="Preview creators">
+          <div class="artist-row-skeleton"></div>
+          <div class="artist-row-skeleton"></div>
+          <div class="artist-row-skeleton"></div>
+          <div class="artist-row-skeleton"></div>
+        </div>
+      </div>
+    </section>
+
+    <section class="catalog-section" id="catalog" aria-labelledby="catalog-title">
+      <div class="catalog-heading">
+        <div>
+          <p class="section-number">02 / Shop the drops</p>
+          <h2 id="catalog-title">Choose what moves your work forward.</h2>
+        </div>
+        <div class="catalog-status" id="catalog-status">Connecting to the founding catalog…</div>
+      </div>
+
+      <div class="filter-bar" role="group" aria-label="Filter catalog by product type">
+        <button class="filter-button is-active" type="button" data-filter="all">All drops</button>
+        <button class="filter-button" type="button" data-filter="dj_tools">DJ tools</button>
+        <button class="filter-button" type="button" data-filter="stems">Stems</button>
+        <button class="filter-button" type="button" data-filter="masters">Masters</button>
+        <button class="filter-button" type="button" data-filter="education">Classes</button>
+        <button class="filter-button" type="button" data-filter="review">Reviews</button>
+      </div>
+
+      <div class="product-grid" id="product-grid" aria-live="polite">
+        <div class="product-skeleton"></div>
+        <div class="product-skeleton"></div>
+        <div class="product-skeleton"></div>
+      </div>
+
+      <div class="catalog-error" id="catalog-error" hidden>
+        <p class="catalog-error-code">SIGNAL INTERRUPTED</p>
+        <h3>The founding catalog could not connect.</h3>
+        <p>Nothing has been lost. Try opening the catalog again.</p>
+        <button class="button button-primary" id="retry-catalog" type="button">Reconnect</button>
+      </div>
+    </section>
+  </main>
+
+  <div class="modal" id="product-modal" hidden>
+    <div class="modal-backdrop" data-close-product></div>
+    <section class="product-dialog" role="dialog" aria-modal="true" aria-labelledby="product-modal-title">
+      <button class="modal-close" type="button" data-close-product aria-label="Close product details">×</button>
+      <p class="product-dialog-kicker" id="product-modal-kicker"></p>
+      <h2 id="product-modal-title"></h2>
+      <p class="product-dialog-description" id="product-modal-description"></p>
+      <div class="product-dialog-meta">
+        <p><span>Delivery</span><strong id="product-modal-format"></strong></p>
+        <p><span>Edition</span><strong id="product-modal-edition"></strong></p>
+        <p><span>Price</span><strong id="product-modal-price"></strong></p>
+      </div>
+      <div class="preview-strip" aria-label="Audio preview placeholder">
+        <span>PREVIEW TRANSMISSION</span>
+        <div class="waveform" aria-hidden="true"></div>
+        <strong>Creator audio connects after catalog approval</strong>
+      </div>
+      <button class="button button-primary product-save-button" id="product-save-button" type="button"></button>
+      <p class="dialog-note">Saving a drop records interest only. Checkout opens after creator approval, rights review, and launch readiness.</p>
+    </section>
+  </div>
+
+  <div class="modal" id="identity-modal" hidden>
+    <div class="modal-backdrop" data-close-identity></div>
+    <section class="identity-dialog" role="dialog" aria-modal="true" aria-labelledby="identity-title">
+      <button class="modal-close" type="button" data-close-identity aria-label="Close membership">×</button>
+      <p class="eyebrow">HALO membership</p>
+      <h2 id="identity-title">Keep your place in the founding world.</h2>
+      <p class="identity-copy">Save drops, register creator interest, and carry one identity across HALO.</p>
+      <div class="identity-tabs" role="tablist" aria-label="Membership action">
+        <button type="button" role="tab" aria-selected="true" data-auth-mode="signup">Join</button>
+        <button type="button" role="tab" aria-selected="false" data-auth-mode="login">Sign in</button>
+      </div>
+      <div class="form-message" id="identity-message" role="status"></div>
+      <form id="identity-form">
+        <label id="name-field">Display name<input id="identity-name" name="name" autocomplete="name" minlength="2" maxlength="32" required></label>
+        <label>Email<input id="identity-email" name="email" type="email" autocomplete="email" required></label>
+        <label>Password<input id="identity-password" name="password" type="password" autocomplete="new-password" minlength="8" required></label>
+        <button class="button button-primary" id="identity-submit" type="submit">Join HALO</button>
+      </form>
+    </section>
+  </div>
+
+  <div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
+</body>
+</html>

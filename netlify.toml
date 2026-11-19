@@ -165,6 +165,12 @@
   force = true
 
 [[redirects]]
+  from = "/artist-shop/"
+  to = "/artist-shop/index.html"
+  status = 200
+  force = true
+
+[[redirects]]
   from = "/shop"
   to = "/music-upload/index.html"
   status = 200

@@ -222,6 +222,7 @@ async function pushToShop(){
     const data=await response.json().catch(()=>({}));
     if(!response.ok||data.success!==true)throw new Error(data.message||"The live push could not be confirmed. Try again.");
     pushed=true;
+    try{const channel=new BroadcastChannel("halo-catalog-shop");channel.postMessage({type:"pushed",songId:data.songId||song.id||"",releaseId:data.releaseId||""});channel.close()}catch{}
     message(data.message||"Published to Shop & Charts.");
     status.textContent=data.message||"Published to Shop & Charts.";
   }catch(error){message(error.message);status.textContent=error.message}
@@ -240,6 +241,7 @@ async function haloSyncCatalogToShop(savedTrack){
     const data=await response.json().catch(()=>({}));
     if(!response.ok||data.success!==true)return{success:false,status:response.status,message:data.message||"The shop sync could not be confirmed. Try again."};
     window.dispatchEvent(new CustomEvent("halo:catalog-shop-synced",{detail:{songId:data.songId,releaseId:data.releaseId,track:data.track}}));
+    try{const channel=new BroadcastChannel("halo-catalog-shop");channel.postMessage({type:"synced",songId:data.songId||"",releaseId:data.releaseId||""});channel.close()}catch{}
     return data;
   }catch(error){return{success:false,message:error?.message||"The shop sync could not be confirmed. Try again."}}
 }

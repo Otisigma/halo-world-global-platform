@@ -1,0 +1,92 @@
+/* HALO Song Catalog tracks on the Artist Shop. Builds on /creators/marketplace.css tokens. */
+.catalog-tracks-section { padding-top: clamp(3rem, 7vw, 6rem); }
+.catalog-track-tools {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-bottom: 1.2rem;
+}
+.catalog-track-tools .filter-bar { margin: 0; flex: 1 1 520px; }
+.catalog-track-search {
+  flex: 0 1 280px;
+  min-width: 200px;
+  padding: .7rem .9rem;
+  border: 1px solid var(--ink);
+  color: var(--ink);
+  background: transparent;
+  font: inherit;
+  font-size: .7rem;
+}
+.catalog-track-search:focus-visible { outline: 2px solid var(--ember); outline-offset: 2px; }
+
+.catalog-track-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 1px;
+  border: 1px solid var(--ink);
+  background: var(--ink);
+}
+.catalog-track-card {
+  display: flex;
+  flex-direction: column;
+  padding: 1.1rem;
+  background: var(--paper);
+  animation: card-enter 420ms ease both;
+}
+.catalog-track-art {
+  position: relative;
+  aspect-ratio: 1;
+  margin-bottom: 1rem;
+  overflow: hidden;
+  border: 1px solid var(--ink);
+  background: var(--ink-soft);
+}
+.catalog-track-art img { display: block; width: 100%; height: 100%; object-fit: cover; }
+.catalog-track-art > span {
+  display: grid;
+  height: 100%;
+  place-items: center;
+  color: var(--signal);
+  font-family: var(--display);
+  font-size: 3.5rem;
+  text-transform: uppercase;
+}
+.catalog-track-play {
+  position: absolute;
+  right: .7rem;
+  bottom: .7rem;
+  width: 48px;
+  height: 48px;
+  border: 1px solid var(--ink);
+  border-radius: 50%;
+  color: var(--ink);
+  background: var(--signal);
+  font-size: .9rem;
+  cursor: pointer;
+  box-shadow: 3px 3px 0 var(--ink);
+}
+.catalog-track-play:hover { transform: translate(-2px, -2px); box-shadow: 5px 5px 0 var(--ink); }
+.catalog-track-play.is-playing { background: var(--ember); }
+.catalog-track-card h3 {
+  margin: .4rem 0 0;
+  font-family: var(--display);
+  font-size: clamp(1.1rem, 1.6vw, 1.45rem);
+  line-height: 1;
+  letter-spacing: -.04em;
+  overflow-wrap: anywhere;
+}
+.catalog-track-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: .8rem;
+  margin-top: auto;
+  padding-top: 1rem;
+  border-top: 1px solid var(--line);
+}
+.catalog-track-card .product-creator { margin-bottom: 1rem; }
+.catalog-track-footer .product-price { font-size: 1.35rem; }
+.catalog-track-footer .button { padding: .55rem .85rem; font-size: .62rem; text-decoration: none; }
+.catalog-track-more { display: block; margin: 1.5rem auto 0; }

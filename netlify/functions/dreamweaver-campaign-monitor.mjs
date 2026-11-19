@@ -1,7 +1,21 @@
 import { getDatabase } from "@netlify/database";
 import { reviewCampaignEvidence } from "../lib/dreamweaver-campaigns.mjs";
+import { textDailyCheck } from "../lib/owner-alerts.mjs";
 
 export default async function dreamweaverCampaignMonitor() {
+  try {
+    const results = await reviewActiveCampaigns();
+    const low = results.filter(result => Number(result.score) < 50).length;
+    await textDailyCheck("Dreamweaver campaigns", {
+      lines: [results.length ? `Reviewed ${results.length} campaign(s)${low ? `, ${low} scoring under 50` : ""}` : "No new campaign activity to review"]
+    });
+  } catch (error) {
+    await textDailyCheck("Dreamweaver campaigns", { status: "failed", lines: [error instanceof Error ? error.message : "unknown error"] });
+    throw error;
+  }
+}
+
+async function reviewActiveCampaigns() {
   const db = getDatabase();
   const campaigns = await db.sql`
     SELECT campaign.*
@@ -35,6 +49,7 @@ export default async function dreamweaverCampaignMonitor() {
     results.push({ campaignId: campaign.id, score: assessment.score, grade: assessment.grade, model: assessment.model });
   }
   console.log("Dreamweaver campaign monitoring completed", { campaigns: campaigns.length, results });
+  return results;
 }
 
 export const config = { schedule: "30 7 * * *" };

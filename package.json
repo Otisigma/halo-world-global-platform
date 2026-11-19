@@ -65,7 +65,7 @@
     "test:music-home": "node scripts/music-home-contracts.mjs && node scripts/music-home-api-contracts.mjs && node scripts/return-celebration-contracts.mjs && npm run -s test:playlists",
     "test:release-conveyor": "node scripts/release-watchdog-contracts.mjs && node scripts/release-conveyor-contracts.mjs && node scripts/halo-master-orchestrator-contracts.mjs && node scripts/release-pipeline-contracts.mjs && node scripts/release-audio-contracts.mjs && npm run -s test:release-teaser",
     "test:guard-preflight": "node scripts/request-preflight-contracts.mjs",
-    "test:owner-alerts": "node scripts/owner-alert-contracts.mjs",
+    "test:owner-alerts": "node scripts/owner-alert-contracts.mjs && node scripts/daily-check-sms-contracts.mjs",
     "test:master-orchestrator": "node scripts/halo-master-orchestrator-contracts.mjs",
     "test:master-provenance-homepage": "node scripts/master-provenance-homepage-contracts.mjs",
     "test:master-provenance": "node scripts/master-provenance-contracts.mjs && node --test scripts/master-provenance-observation-contracts.mjs && node scripts/master-provenance-panel-contracts.mjs && node scripts/master-provenance-homepage-contracts.mjs",

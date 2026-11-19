@@ -35,7 +35,7 @@ const elements = {
   identityMessage: document.querySelector("#identity-message"),
   identityTitle: document.querySelector("#identity-title"),
   nameField: document.querySelector("#name-field"),
-  foundingButtons: [document.querySelector("#founding-creator-hero"), document.querySelector("#founding-creator-button")],
+  foundingButtons: [document.querySelector("#founding-creator-hero"), document.querySelector("#founding-creator-button")].filter(Boolean),
   foundingStatus: document.querySelector("#founding-status"),
   toast: document.querySelector("#toast")
 };
@@ -192,7 +192,7 @@ function updateCatalogMeta() {
     button.textContent = interested ? "Founding interest registered ✓" : button.id === "founding-creator-hero" ? "Apply as a founding creator" : "Register founding interest";
     button.setAttribute("aria-pressed", String(interested));
   });
-  elements.foundingStatus.textContent = interested
+  if (elements.foundingStatus) elements.foundingStatus.textContent = interested
     ? "Your interest is attached to your HALO membership. The founding team can now include you in creator onboarding."
     : "Membership is required so we can keep your interest attached to your HALO identity.";
 }

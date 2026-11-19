@@ -36,6 +36,8 @@
   <script src="/mobile-navigation.js" defer></script>
   <script src="/identity.js" type="module"></script>
   <script src="/creators/marketplace.js" defer></script>
+  <link rel="stylesheet" href="/artist-shop/catalog-tracks.css">
+  <script src="/artist-shop/catalog-tracks.js" defer></script>
 </head>
 <body>
   <a class="skip-link" href="#catalog">Skip to the shop</a>
@@ -49,6 +51,7 @@
     </a>
     <nav class="primary-nav" aria-label="Artist Shop navigation">
       <a href="#artists">Artists</a>
+      <a href="#catalog-tracks">Music</a>
       <a href="#catalog">Drops</a>
       <a href="/music-upload/">HALO Shop</a>
       <a href="/creators/">Creator World</a>
@@ -91,10 +94,39 @@
       </div>
     </section>
 
+    <section class="catalog-section catalog-tracks-section" id="catalog-tracks" aria-labelledby="catalog-tracks-title">
+      <div class="catalog-heading">
+        <div>
+          <p class="section-number">02 / From the HALO Song Catalog</p>
+          <h2 id="catalog-tracks-title">Released music, direct from the artist.</h2>
+        </div>
+        <div class="catalog-status" id="catalog-track-status" role="status">Loading published tracks from the HALO Song Catalog…</div>
+      </div>
+
+      <div class="catalog-track-tools">
+        <div class="filter-bar" id="catalog-track-filters" role="group" aria-label="Filter catalog tracks by artist"></div>
+        <input class="catalog-track-search" id="catalog-track-search" type="search" placeholder="Search tracks, artists, genres" aria-label="Search catalog tracks">
+      </div>
+
+      <div class="catalog-track-grid" id="catalog-track-grid" aria-live="polite">
+        <div class="product-skeleton"></div>
+        <div class="product-skeleton"></div>
+        <div class="product-skeleton"></div>
+      </div>
+      <button class="button button-quiet catalog-track-more" id="catalog-track-more" type="button" hidden>Show more</button>
+
+      <div class="catalog-error" id="catalog-track-error" hidden>
+        <p class="catalog-error-code">SIGNAL INTERRUPTED</p>
+        <h3>The HALO Song Catalog could not connect.</h3>
+        <p>Your music is safe. Try loading the catalog again.</p>
+        <button class="button button-primary" id="catalog-track-retry" type="button">Reconnect</button>
+      </div>
+    </section>
+
     <section class="catalog-section" id="catalog" aria-labelledby="catalog-title">
       <div class="catalog-heading">
         <div>
-          <p class="section-number">02 / Shop the drops</p>
+          <p class="section-number">03 / Shop the drops</p>
           <h2 id="catalog-title">Choose what moves your work forward.</h2>
         </div>
         <div class="catalog-status" id="catalog-status">Connecting to the founding catalog…</div>

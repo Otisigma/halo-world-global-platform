@@ -3,8 +3,8 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>HALO Artist Shop — Artist Storefronts</title>
-  <meta name="description" content="Browse HALO artist storefronts: DJ tools, stems, masters, classes, and reviews, direct from the creator.">
+  <title>HALO Artist Shop — UK Store, Always-On Library &amp; Video Gallery</title>
+  <meta name="description" content="The HALO Artist Shop: UK-priced releases and stems, an Always-On Library of artist previews, and the HALO Video Gallery, direct from the creator.">
   <meta name="theme-color" content="#11100d">
   <link rel="manifest" href="/app.webmanifest">
   <link rel="apple-touch-icon" href="/assets/halo-app-icon-180.png">
@@ -38,6 +38,8 @@
   <script src="/creators/marketplace.js" defer></script>
   <link rel="stylesheet" href="/artist-shop/catalog-tracks.css">
   <script src="/artist-shop/catalog-tracks.js" defer></script>
+  <link rel="stylesheet" href="/artist-shop/shop-experience.css">
+  <script src="/artist-shop/shop-experience.js" defer></script>
 </head>
 <body>
   <a class="skip-link" href="#catalog">Skip to the shop</a>
@@ -52,18 +54,42 @@
     <nav class="primary-nav" aria-label="Artist Shop navigation">
       <a href="#artists">Artists</a>
       <a href="#catalog-tracks">Music</a>
+      <a href="#signal-drops">UK Store</a>
+      <a href="#always-on-library">Library</a>
+      <a href="#video-gallery">Videos</a>
       <a href="#catalog">Drops</a>
       <a href="/music-upload/">HALO Shop</a>
       <a href="/creators/">Creator World</a>
       <a href="/creators/#money-model">How money works</a>
     </nav>
     <div class="header-actions">
+      <label class="currency-switch">
+        <span class="visually-hidden">Currency</span>
+        <select id="currency-select" aria-label="Display prices in">
+          <option value="GBP" selected>£ GBP</option>
+          <option value="USD">$ USD</option>
+        </select>
+      </label>
+      <button class="bag-button" id="open-bag" type="button" aria-haspopup="dialog" aria-controls="bag-drawer">Bag <span class="bag-count" id="bag-count">0</span></button>
       <button class="text-button" id="auth-button" type="button">Join / sign in</button>
       <a class="home-link" href="/halo">Main HALO <span aria-hidden="true">↗</span></a>
     </div>
   </header>
 
   <main>
+    <section class="signal-hero" aria-labelledby="signal-hero-title">
+      <div class="signal-hero-inner">
+        <p class="signal-eyebrow">UK Sterling (£) · Direct-to-fan catalog</p>
+        <h1 id="signal-hero-title">Enter the signal.</h1>
+        <p>Play artist previews back-to-back, watch the visuals, and take the music home straight from the independent HALO catalog—priced in UK pounds.</p>
+        <div class="signal-hero-actions">
+          <a class="signal-btn" href="#signal-drops">Shop in GBP (£)</a>
+          <a class="signal-btn-outline" href="#always-on-library">Always-On Library</a>
+          <a class="signal-btn-outline" href="#video-gallery">Video Gallery</a>
+        </div>
+      </div>
+    </section>
+
     <aside class="prototype-notice" aria-label="Artist Shop preview status">
       <div class="prototype-stamp">
         <span>Current status</span>
@@ -123,10 +149,85 @@
       </div>
     </section>
 
+    <section class="signal-band" id="signal-drops" aria-labelledby="signal-drops-title">
+      <div class="signal-head">
+        <div>
+          <p class="signal-number">03 / UK Store</p>
+          <h2 id="signal-drops-title">Signal Drops — priced in pounds.</h2>
+          <p>Masters, stem bundles and studio editions from the HALO roster.</p>
+        </div>
+        <p class="signal-tag" id="currency-note">Prices in UK pounds (GBP £)</p>
+      </div>
+      <div class="signal-grid" id="signal-drop-grid" aria-live="polite"></div>
+    </section>
+
+    <section class="signal-band" id="always-on-library" aria-labelledby="library-title">
+      <div class="signal-head">
+        <div>
+          <p class="signal-number">04 / Always-On Library</p>
+          <h2 id="library-title">The library never goes quiet.</h2>
+          <p>Previews play back-to-back. Filter by style, search by title, artist or BPM, and add to your bag without stopping the music.</p>
+        </div>
+        <p class="signal-tag" id="library-count" role="status"></p>
+      </div>
+
+      <div class="library-shell">
+        <div class="library-now">
+          <div class="library-now-art" id="library-now-art" aria-hidden="true"></div>
+          <div class="library-now-text">
+            <p class="signal-tag">Now playing</p>
+            <strong id="library-now-title">Pick a track to start the signal</strong>
+            <span id="library-now-meta"></span>
+          </div>
+          <div class="library-transport" role="group" aria-label="Library player">
+            <button type="button" id="library-prev" aria-label="Previous track">⏮</button>
+            <button type="button" id="library-play" class="is-main" aria-label="Play">▶</button>
+            <button type="button" id="library-next" aria-label="Next track">⏭</button>
+            <button type="button" id="library-shuffle" aria-pressed="false" aria-label="Shuffle">⤮</button>
+          </div>
+          <div class="library-progress">
+            <input type="range" id="library-seek" min="0" max="1000" value="0" aria-label="Seek">
+            <span id="library-time">0:00 / 0:00</span>
+          </div>
+          <audio id="library-audio" preload="none"></audio>
+        </div>
+
+        <div class="library-tools">
+          <input type="search" id="library-search" class="signal-input" placeholder="Search title, artist or BPM…" aria-label="Search the library">
+          <select id="library-genre" class="signal-select" aria-label="Filter by style"><option value="all">All styles</option></select>
+        </div>
+        <div class="library-list" id="library-list" aria-live="polite"></div>
+      </div>
+    </section>
+
+    <section class="signal-band" id="video-gallery" aria-labelledby="video-title">
+      <div class="signal-head">
+        <div>
+          <p class="signal-number">05 / HALO Video Gallery</p>
+          <h2 id="video-title">Watch the catalog.</h2>
+          <p>Teasers, studio sessions and performance cuts from HALO artists.</p>
+        </div>
+        <p class="signal-tag" id="video-status" role="status">Loading the gallery…</p>
+      </div>
+      <div class="video-stage" id="video-stage">
+        <div class="video-screen">
+          <video id="video-player" controls playsinline preload="metadata" hidden></video>
+          <iframe id="video-embed" hidden allow="autoplay; encrypted-media; picture-in-picture; fullscreen" allowfullscreen loading="lazy" referrerpolicy="strict-origin-when-cross-origin"></iframe>
+          <div class="video-placeholder" id="video-placeholder"><span>Visual in production</span></div>
+        </div>
+        <div class="video-caption">
+          <p class="signal-tag" id="video-active-tag">Featured visual</p>
+          <h3 id="video-active-title"></h3>
+          <p id="video-active-desc"></p>
+        </div>
+      </div>
+      <div class="video-grid" id="video-grid"></div>
+    </section>
+
     <section class="catalog-section" id="catalog" aria-labelledby="catalog-title">
       <div class="catalog-heading">
         <div>
-          <p class="section-number">03 / Shop the drops</p>
+          <p class="section-number">06 / Concept drops</p>
           <h2 id="catalog-title">Choose what moves your work forward.</h2>
         </div>
         <div class="catalog-status" id="catalog-status">Connecting to the founding catalog…</div>
@@ -197,6 +298,29 @@
         <button class="button button-primary" id="identity-submit" type="submit">Join HALO</button>
       </form>
     </section>
+  </div>
+
+  <div class="library-dock" id="library-dock" hidden>
+    <span class="eq" aria-hidden="true"><i></i><i></i><i></i></span>
+    <a href="#always-on-library" id="library-dock-title"></a>
+    <button type="button" id="library-dock-play" aria-label="Play">▶</button>
+    <button type="button" id="library-dock-next" aria-label="Next track">⏭</button>
+  </div>
+
+  <div class="bag-backdrop" id="bag-backdrop" hidden>
+    <aside class="bag-drawer" id="bag-drawer" role="dialog" aria-modal="true" aria-labelledby="bag-title">
+      <div class="bag-top">
+        <h2 id="bag-title">Your HALO bag</h2>
+        <button class="signal-btn-outline" type="button" data-close-bag>Close</button>
+      </div>
+      <div class="bag-items" id="bag-items"></div>
+      <div class="bag-foot">
+        <div class="bag-total"><span>Total</span><strong id="bag-total">£0.00</strong></div>
+        <p class="bag-note" id="bag-total-note"></p>
+        <button class="signal-btn bag-checkout" id="bag-checkout" type="button">Checkout</button>
+        <p class="bag-status" id="bag-status" role="status"></p>
+      </div>
+    </aside>
   </div>
 
   <div class="toast" id="toast" role="status" aria-live="polite" hidden></div>

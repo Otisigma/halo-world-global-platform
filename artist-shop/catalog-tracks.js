@@ -43,6 +43,8 @@
 
   function formatPrice(cents, currency) {
     if (!Number.isFinite(cents) || cents <= 0) return "";
+    // Follow the shop's GBP/USD toggle when the shop experience layer is loaded.
+    if (window.haloShopMoney) return window.haloShopMoney.format(cents, currency);
     const code = /^[A-Z]{3}$/.test(String(currency || "")) ? currency : "USD";
     try {
       return new Intl.NumberFormat("en-GB", { style: "currency", currency: code, currencyDisplay: "narrowSymbol" }).format(cents / 100);
@@ -71,7 +73,9 @@
       preview,
       shopUrl,
       saleStatus,
-      price: saleStatus === "for_sale" ? formatPrice(priceCents, catalog.currency) : "",
+      priceMinor: Number.isFinite(priceCents) ? priceCents : 0,
+      currency: /^[A-Z]{3}$/.test(String(catalog.currency || "")) ? catalog.currency : "USD",
+      get price() { return saleStatus === "for_sale" ? formatPrice(this.priceMinor, this.currency) : ""; },
       releaseDate: release.releaseDate || ""
     };
   }
@@ -173,6 +177,7 @@
         .filter(track => track && !seen.has(track.id) && seen.add(track.id));
       if (state.artist !== "all" && !state.tracks.some(track => artistKey(track.artist) === state.artist)) state.artist = "all";
       render();
+      window.dispatchEvent(new CustomEvent("halo:artist-shop-catalog", { detail: { tracks: state.tracks.slice() } }));
     } catch (error) {
       console.warn("Artist Shop could not load the HALO Song Catalog", error);
       if (!state.tracks.length) {
@@ -197,6 +202,7 @@
       audio.src = track.preview;
       state.playingId = id;
     }
+    window.dispatchEvent(new CustomEvent("halo:shop-audio", { detail: { source: "catalog-grid" } }));
     audio.play().catch(() => {
       state.playingId = "";
       renderGrid();
@@ -212,6 +218,12 @@
     renderGrid();
   });
   audio.addEventListener("ended", () => { state.playingId = ""; renderGrid(); });
+
+  // Only one HALO player sounds at a time: pause when the library or a video starts.
+  window.addEventListener("halo:shop-audio", event => {
+    if (event.detail?.source !== "catalog-grid" && !audio.paused) audio.pause();
+  });
+  window.addEventListener("halo:currency-change", () => { renderGrid(); renderStatus(); });
 
   elements.filters.addEventListener("click", event => {
     const button = event.target.closest("[data-artist]");

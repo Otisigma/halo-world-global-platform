@@ -1044,6 +1044,44 @@ assert.match(forcePushApi, /new TextEncoder\(\)\.encode\(text\)\.byteLength/, "s
   await click({ currentTarget: button });
   assert.equal(status.textContent, "Select and save a track first.");
 }
+{
+  const editor = await read("song-catalog/song-catalog.js");
+  const source = editor.match(/async function haloSyncCatalogToShop\(savedTrack\)\{[\s\S]*?\n\}/)?.[0];
+  assert.ok(source, "editor must expose the catalog-to-shop sync helper");
+  assert.match(editor, /window\.haloSyncCatalogToShop=haloSyncCatalogToShop;/);
+  assert.match(editor, /shouldAutoSyncToShop\(savedTrack\)\)\{[\s\S]*?window\.haloSyncCatalogToShop\(savedTrack\)/, "saving a live track must resync it to the shop");
+  const gate = editor.match(/function shouldAutoSyncToShop\(song\)\{[^\n]*\}/)?.[0];
+  const shouldAutoSync = new Function(`${gate};return shouldAutoSyncToShop;`)();
+  assert.equal(shouldAutoSync({ pipelineStatus: "published", saleStatus: "for_sale", rightsStatus: "owned" }), true);
+  assert.equal(shouldAutoSync({ pipelineStatus: "draft", saleStatus: "for_sale" }), false, "saving must never publish an unpublished track");
+  assert.equal(shouldAutoSync({ pipelineStatus: "published", saleStatus: "not_for_sale" }), false, "sync must not override a withdrawn sale status");
+  assert.equal(shouldAutoSync({ pipelineStatus: "published", saleStatus: "for_sale", rightsStatus: "disputed" }), false);
+  const events = [];
+  let body;
+  let ok = true;
+  const sync = new Function("fetch", "window", "CustomEvent", `${source};return haloSyncCatalogToShop;`)(
+    async (url, options) => {
+      assert.equal(url, "/api/catalog/force-push-track");
+      assert.equal(options.credentials, "same-origin");
+      body = JSON.parse(options.body);
+      if (!ok) return { ok: false, status: 409, json: async () => ({ message: "Resolve the rights dispute" }) };
+      return { ok: true, status: 200, json: async () => ({ success: true, songId: sampleSongId, releaseId: "r1", track: { id: sampleSongId } }) };
+    },
+    { dispatchEvent: event => events.push(event) },
+    class { constructor(type, init) { this.type = type; this.detail = init.detail; } },
+  );
+  const result = await sync({ id: sampleSongId, title: "Test", salePriceCents: 1 });
+  assert.deepEqual(body, { id: sampleSongId }, "sync must send only the id so the server publishes its canonical record");
+  assert.equal(result.success, true);
+  assert.equal(events[0].type, "halo:catalog-shop-synced");
+  await sync(sampleSongId);
+  assert.deepEqual(body, { id: sampleSongId });
+  ok = false;
+  const failed = await sync({ id: sampleSongId });
+  assert.equal(failed.success, false);
+  assert.equal(failed.message, "Resolve the rights dispute");
+  assert.equal((await sync(null)).success, false);
+}
 const managedDreamweaverFlow = resolveDreamweaverPageFlow(sampleSongId, {
   mixId: "sample-release",
   publicUrl: "/music/?song=sample-release",

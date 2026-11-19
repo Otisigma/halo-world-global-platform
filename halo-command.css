@@ -168,6 +168,19 @@ main { width: min(1500px, 100%); margin: 0 auto; }
 #signupSources .briefing-panel { padding: 24px; min-width: 0; overflow-wrap: anywhere; }
 #signupSources ul { max-height: 32rem; overflow: auto; padding-left: 20px; }
 #signupSources li { margin-bottom: 24px; }
+.runner-pillars { grid-template-columns: repeat(auto-fit, minmax(min(100%, 300px), 1fr)); }
+.runner-pillars .briefing-panel { padding: 24px; min-width: 0; overflow-wrap: anywhere; }
+.runner-pillars h3 { margin: 0 0 12px; }
+.runner-pillars dl { display: grid; grid-template-columns: 1fr auto; gap: 6px 16px; margin: 0 0 14px; }
+.runner-pillars dt { color: var(--muted); }
+.runner-pillars dd { margin: 0; text-align: right; font-family: var(--mono); }
+.runner-pillars ul, .runner-gaps, .runner-history ul { padding-left: 20px; line-height: 1.6; }
+.runner-flag { color: var(--paper-soft); font-weight: 700; }
+.runner-moves { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 260px), 1fr)); gap: 12px; margin: 18px 0; }
+.runner-moves article { border: 1px solid var(--line-strong); padding: 18px; }
+.runner-moves h3 { margin: 6px 0 8px; }
+.runner-history { margin: 18px 0; }
+.runner-history summary { cursor: pointer; min-height: 44px; display: flex; align-items: center; }
 #memberBrowser { grid-template-columns: repeat(auto-fit, minmax(min(100%, 300px), 1fr)); }
 #memberBrowser .briefing-panel { padding: 24px; min-width: 0; overflow-wrap: anywhere; }
 #memberBrowser ul { max-height: 36rem; overflow: auto; padding-left: 20px; }

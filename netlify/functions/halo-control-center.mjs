@@ -6,6 +6,7 @@ import { requestPreflight } from "../../lib/request-preflight.js";
 import { loadOwnerSignups } from "../lib/owner-signups.mjs";
 import { cleanMemberId, loadOwnerMemberActivity, loadOwnerMemberDirectory } from "../lib/owner-member-activity.mjs";
 import { loadOwnerOutcomes } from "../lib/owner-outcomes.mjs";
+import { buildRunnerBriefing, loadStoredBriefings } from "../lib/runner-briefing.mjs";
 
 function json(body, status = 200, headers = {}) {
   return Response.json(body, { status, headers: { "Cache-Control": "private, no-store", ...headers } });
@@ -27,6 +28,16 @@ export default async function haloControlCenterHandler(request) {
     if (view === "outcomes") {
       if (request.method !== "GET") return json({ message: "Outcome review is read-only" }, 405, { Allow: "HEAD, GET" });
       return json({ outcomes: await loadOwnerOutcomes(getDatabase(), user) });
+    }
+    if (view === "briefing") {
+      if (request.method !== "GET") return json({ message: "The runners briefing is read-only" }, 405, { Allow: "HEAD, GET" });
+      const db = getDatabase();
+      const [briefing, stored] = await Promise.all([buildRunnerBriefing(db), loadStoredBriefings(db)]);
+      const history = stored?.map(item => ({
+        briefingDate: item.briefingDate, triggerType: item.triggerType, generatedAt: item.generatedAt,
+        coverage: item.briefing?.coverage || null, leverageMoves: item.briefing?.leverageMoves || []
+      })) ?? null;
+      return json({ briefing, history });
     }
     if (view === "members" || view === "member") {
       if (request.method !== "GET") return json({ message: "Member activity review is read-only" }, 405, { Allow: "HEAD, GET" });

@@ -1222,23 +1222,6 @@
                 transition: none;
             }
         }
-        .halo-signal-banner { display: block; overflow: hidden; border: 1px solid #8c714b; background: #171410; color: #f1ede4; text-decoration: none; transition: border-color .25s ease, transform .25s ease; }
-        .halo-signal-banner picture, .halo-signal-banner img { display: block; width: 100%; }
-        .halo-signal-banner img { height: auto; }
-        .halo-signal-banner__mobile { display: none; }
-        .halo-signal-banner__action { display: flex; align-items: center; justify-content: space-between; min-height: 48px; padding: .85rem 1.1rem; border-top: 1px solid #59472f; color: #e4c58e; font-size: .85rem; letter-spacing: .08em; }
-        .halo-signal-banner:hover { border-color: #e4c58e; transform: translateY(-2px); }
-        .halo-signal-banner:active { transform: translateY(0); }
-        .halo-signal-banner:focus-visible { outline: 3px solid #e4c58e; outline-offset: 5px; }
-        @media (max-width: 600px) {
-          .halo-signal-banner picture { height: 12rem; overflow: hidden; }
-          .halo-signal-banner img { height: 100%; object-fit: cover; object-position: right center; }
-          .halo-signal-banner__mobile { display: block; padding: 1.2rem; }
-          .halo-signal-banner__mobile strong { display: block; color: #e4c58e; font: 500 2.6rem/1 'Cormorant Garamond', Georgia, serif; }
-          .halo-signal-banner__mobile span { display: block; margin-top: .8rem; font-size: .8rem; line-height: 1.7; }
-        }
-        @media (prefers-reduced-motion: reduce) { .halo-signal-banner { transition: none; } }
-
         .halo-chart-feature { display: grid; grid-template-columns: minmax(0, 1fr) minmax(160px, .38fr); gap: 2rem; padding: clamp(1.5rem, 4vw, 3.5rem); border: 1px solid #789b9b; border-top: 4px solid #b7d7d2; background: #102022; color: #edf4ed; }
         .halo-chart-feature__eyebrow { margin: 0 0 1.25rem; font-size: .7rem; letter-spacing: .15em; text-transform: uppercase; color: #b7d7d2; }
         .halo-chart-feature h2 { margin: 0; font-family: 'Barlow Condensed', sans-serif; font-size: clamp(2.8rem, 6vw, 5rem); font-weight: 700; line-height: .98; }
@@ -1252,6 +1235,15 @@
         .halo-chart-feature__edition > span { font-size: .6rem; letter-spacing: .15em; color: #b7d7d2; }
         .halo-chart-feature__edition strong { font-family: 'Barlow Condensed', sans-serif; font-size: clamp(4rem, 8vw, 7rem); font-weight: 500; line-height: 1.1; }
         .halo-chart-feature__edition p { margin: 0; font-size: .75rem; line-height: 1.8; color: #c4d2ce; }
+        .signal-banner { display: block; border: 1px solid rgba(207, 167, 106, .4); background: #171410; color: #f3eadb; text-decoration: none; overflow: hidden; transition: border-color .25s ease, transform .25s ease; }
+        .signal-banner-art { display: block; overflow: hidden; }
+        .signal-banner-art img { display: block; width: 100%; height: auto; }
+        .signal-banner-mobile { display: none; }
+        .signal-banner-action { display: flex; align-items: center; justify-content: space-between; min-height: 3rem; padding: .85rem 1.1rem; border-top: 1px solid rgba(207, 167, 106, .25); color: #e4c58e; font-size: .75rem; letter-spacing: .08em; text-transform: uppercase; }
+        .signal-banner:hover { border-color: #cfa76a; transform: translateY(-.2rem); }
+        .signal-banner:focus-visible { outline: 2px solid #cfa76a; outline-offset: .3rem; }
+        @media (max-width: 600px) { .signal-banner-art { height: 12rem; } .signal-banner-art img { height: 100%; object-fit: cover; object-position: right center; } .signal-banner-mobile { display: block; padding: 1.2rem; } .signal-banner-mobile strong { display: block; color: #e4c58e; font: 400 2.4rem/1 "Cormorant Garamond", Georgia, serif; } .signal-banner-mobile span { display: block; margin-top: .8rem; font-size: .75rem; line-height: 1.7; } }
+        @media (prefers-reduced-motion: reduce) { .signal-banner { transition: none; } .signal-banner:hover { transform: none; } }
         @media (max-width: 640px) { .halo-chart-feature { grid-template-columns: minmax(0, 1fr); } .halo-chart-feature__edition { display: none; } .halo-chart-feature__action { width: 100%; } }
     </style>
 </head>
@@ -4434,16 +4426,16 @@
               {!pathWorkspace && viewMode === 'landing' && (
                 <main className="flex-1 max-w-6xl mx-auto w-full px-4 py-8 md:py-12 space-y-12 overflow-y-auto">
 
-                  <a className="halo-signal-banner" href="https://halo-world-global-platform.netlify.app/obsidian/" aria-label="Enter the signal. Explore the music in Obsidian.">
-                    <picture>
+                  <a className="signal-banner" href="/obsidian/" data-stat-event="open_obsidian_gateway" data-stat-target="homepage_signal_banner" aria-label="Enter the signal. Explore the music in Obsidian.">
+                    <picture className="signal-banner-art">
                       <source media="(max-width: 600px)" srcSet="/assets/enter-the-signal-mobile.webp" />
                       <img src="/assets/enter-the-signal.webp" alt="Enter the signal. HALO Music World — a saxophonist in black and gold." width="1024" height="434" decoding="async" />
                     </picture>
-                    <span className="halo-signal-banner__mobile" aria-hidden="true">
+                    <span className="signal-banner-mobile" aria-hidden="true">
                       <strong>Enter the signal.</strong>
                       <span>Listen to available previews, explore artist-approved links, and follow the music into the HALO catalog.</span>
                     </span>
-                    <span className="halo-signal-banner__action">Explore the music <span aria-hidden="true">→</span></span>
+                    <span className="signal-banner-action">Explore the music <span aria-hidden="true">→</span></span>
                   </a>
 
                   <section className="halo-chart-feature" aria-labelledby="global-chart-feature-title">

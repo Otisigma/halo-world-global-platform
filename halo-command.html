@@ -36,6 +36,7 @@
   <script src="/owner-signups.js" defer></script>
   <script src="/owner-member-activity.js" defer></script>
   <script src="/owner-outcomes.js" defer></script>
+  <script src="/runner-briefing.js" defer></script>
   <script src="/dreamweaver-oracle.js" defer></script>
 </head>
 <body>
@@ -108,6 +109,19 @@
         <p>Seven-day evidence, not feature counts or a quality score. Each measure names its source, denominator and coverage gaps. No individual listener identities or browsing histories are shown.</p>
         <p id="outcomeStatus" role="status">Owner access required.</p>
         <div id="outcomeSources" class="report-grid"></div>
+      </section>
+
+      <section id="runnerBriefing" class="maintenance-section" aria-labelledby="runnerBriefingTitle" hidden>
+        <div class="section-heading">
+          <div><p class="section-label">OWNER-ONLY / DAILY 08:00 UK</p><h2 id="runnerBriefingTitle" tabindex="-1">HALO Runners Briefing</h2></div>
+          <button id="runnerBriefingRefresh" type="button">Refresh briefing</button>
+        </div>
+        <p>The daily runner check-in, built from live platform records: sign-ups and onboarding, payment and payout queries, catalog and provenance health, and growth and competitive edge. A copy is saved every morning at 08:00 UK time. Sources that can't be read show as unavailable, never as zero.</p>
+        <p id="runnerBriefingStatus" role="status">Owner access required.</p>
+        <div id="runnerBriefingMoves" class="runner-moves"></div>
+        <div id="runnerBriefingPillars" class="report-grid runner-pillars"></div>
+        <details class="runner-history"><summary>Saved morning briefings</summary><ul id="runnerBriefingHistory"></ul></details>
+        <ul id="runnerBriefingGaps" class="runner-gaps"></ul>
       </section>
 
       <section class="control-deck" aria-labelledby="controlDeckTitle">

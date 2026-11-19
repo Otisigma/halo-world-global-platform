@@ -1,6 +1,7 @@
 import { getDatabase } from "@netlify/database";
 import OpenAI from "openai";
 import { publishDailyHostConversation } from "../lib/community-hosts.mjs";
+import { textDailyCheck } from "../lib/owner-alerts.mjs";
 import { recordScheduledHeartbeat } from "../lib/scheduled-heartbeats.mjs";
 
 export async function generateHostConversation(topic) {
@@ -34,16 +35,19 @@ export default async function communityHostDailyHandler() {
   try {
     if (process.env.HALO_COMMUNITY_HOSTS_ENABLED === "false") {
       await recordScheduledHeartbeat(db, "community-host-daily", "success", { skipped: "disabled" });
+      await textDailyCheck("Community Hosts", { status: "skipped", lines: ["Turned off"] });
       return;
     }
     const result = await publishDailyHostConversation(db, { generate: generateHostConversation });
     await recordScheduledHeartbeat(db, "community-host-daily", "success", result);
+    await textDailyCheck("Community Hosts", { lines: [result.published ? `Posted: ${result.topic}` : "Already posted today"] });
     console.log("HALO daily AI hosts", result);
   } catch (error) {
     console.error("HALO daily AI hosts failed", error instanceof Error ? error.message : "unknown error");
     await recordScheduledHeartbeat(db, "community-host-daily", "failure", {
       error: error instanceof Error ? error.message : "unknown error"
     });
+    await textDailyCheck("Community Hosts", { status: "failed", lines: [error instanceof Error ? error.message : "unknown error"] });
     throw error;
   }
 }

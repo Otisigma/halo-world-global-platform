@@ -72,3 +72,50 @@ export async function notifyOwnerSafely(alert, options) {
     return { sent: [], failed: ["unknown"], configured: true };
   }
 }
+
+// Daily check texts via Twilio. The recipient number lives in HALO_OWNER_SMS_TO, not in the public repo.
+const SMS_MAX_LENGTH = 320;
+const E164 = /^\+[1-9][0-9]{7,14}$/;
+
+export function dailyCheckSmsText({ check, status = "done", lines = [] }) {
+  const mark = status === "failed" ? "FAILED" : status === "skipped" ? "skipped" : "done";
+  return [`HALO ${plainText(check, 60)}: ${mark}`, ...lines.map(line => plainText(line, 120)).filter(Boolean)]
+    .join("\n").slice(0, SMS_MAX_LENGTH);
+}
+
+export async function sendOwnerSms(text, { env, fetchImpl = fetch } = {}) {
+  const sid = readEnvironment("TWILIO_ACCOUNT_SID", env);
+  const token = readEnvironment("TWILIO_AUTH_TOKEN", env);
+  const from = readEnvironment("TWILIO_FROM_NUMBER", env).replace(/\s+/g, "");
+  const to = readEnvironment("HALO_OWNER_SMS_TO", env).replace(/\s+/g, "");
+  if (!sid || !token || !from || !to) return { sent: false, configured: false };
+  if (!/^AC[0-9a-fA-F]{32}$/.test(sid) || !E164.test(to) || !(E164.test(from) || /^[A-Za-z0-9 ]{1,11}$/.test(from))) {
+    console.warn("HALO owner SMS skipped: Twilio settings are not in the expected format");
+    return { sent: false, configured: false };
+  }
+  try {
+    const response = await fetchImpl(`https://api.twilio.com/2010-04-01/Accounts/${sid}/Messages.json`, {
+      method: "POST",
+      headers: {
+        Authorization: `Basic ${Buffer.from(`${sid}:${token}`).toString("base64")}`,
+        "Content-Type": "application/x-www-form-urlencoded"
+      },
+      body: new URLSearchParams({ To: to, From: from, Body: String(text).slice(0, SMS_MAX_LENGTH) }).toString(),
+      signal: AbortSignal.timeout(ALERT_TIMEOUT_MS)
+    });
+    if (!response.ok) console.warn("HALO owner SMS delivery failed", response.status);
+    return { sent: response.ok, configured: true };
+  } catch {
+    console.warn("HALO owner SMS delivery failed");
+    return { sent: false, configured: true };
+  }
+}
+
+// Never throws, so a texting problem can't break the check itself.
+export async function textDailyCheck(check, options) {
+  try {
+    return await sendOwnerSms(dailyCheckSmsText({ check, ...options }), options);
+  } catch {
+    return { sent: false, configured: true };
+  }
+}

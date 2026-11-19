@@ -165,6 +165,18 @@
   force = true
 
 [[redirects]]
+  from = "/enter-the-signal"
+  to = "/enter-the-signal/index.html"
+  status = 200
+  force = true
+
+[[redirects]]
+  from = "/enter-the-signal/"
+  to = "/enter-the-signal/index.html"
+  status = 200
+  force = true
+
+[[redirects]]
   from = "/artist-shop/"
   to = "/artist-shop/index.html"
   status = 200

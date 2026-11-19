@@ -1,0 +1,879 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>HALO Music World | Enter the Signal</title>
+  <meta name="description" content="Enter the signal: HALO's direct catalog, artist personas, and the Living Chart." />
+  <meta name="theme-color" content="#0b0b0c" />
+  <link rel="manifest" href="/app.webmanifest" />
+  <link rel="apple-touch-icon" href="/assets/halo-app-icon-180.png" />
+  <link rel="canonical" href="https://halo-world-global-platform.netlify.app/enter-the-signal/" />
+  <script src="/stats.js" defer></script>
+  <script src="/site-monitor.js" defer></script>
+  <style>
+    :root {
+      --obsidian: #0b0b0c;
+      --surface: #141416;
+      --surface-elevated: #1b1b20;
+      --gold: #d4af37;
+      --gold-light: #f3e5ab;
+      --bronze: #8c6d28;
+      --text-main: #f5f5f7;
+      --text-muted: #9a9aa2;
+      --border: rgba(212, 175, 55, 0.28);
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    }
+
+    html { scroll-behavior: smooth; }
+
+    body {
+      background: var(--obsidian);
+      color: var(--text-main);
+      line-height: 1.6;
+      overflow-x: hidden;
+    }
+
+    /* Top Nav */
+    nav {
+      position: sticky;
+      top: 0;
+      z-index: 200;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 16px 32px;
+      background: rgba(11, 11, 12, 0.92);
+      backdrop-filter: blur(10px);
+      border-bottom: 1px solid var(--border);
+      gap: 16px;
+      flex-wrap: wrap;
+    }
+
+    .brand {
+      color: var(--gold);
+      font-weight: 800;
+      letter-spacing: 2px;
+      text-decoration: none;
+      font-size: 1.05rem;
+    }
+
+    .nav-links {
+      display: flex;
+      gap: 22px;
+      list-style: none;
+      flex-wrap: wrap;
+    }
+
+    .nav-links a {
+      color: var(--text-muted);
+      text-decoration: none;
+      font-size: 0.9rem;
+      transition: color 0.2s ease;
+    }
+
+    .nav-links a:hover { color: var(--gold); }
+
+    .bag-btn {
+      background: var(--surface-elevated);
+      color: var(--gold-light);
+      border: 1px solid var(--border);
+      padding: 8px 16px;
+      border-radius: 999px;
+      font-size: 0.85rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.2s ease;
+    }
+
+    .bag-btn:hover {
+      border-color: var(--gold);
+      background: rgba(212, 175, 55, 0.12);
+    }
+
+    /* Hero */
+    .hero {
+      position: relative;
+      min-height: 82vh;
+      display: flex;
+      align-items: center;
+      padding: 64px 32px;
+      background:
+        linear-gradient(90deg, rgba(11, 11, 12, 0.96) 0%, rgba(11, 11, 12, 0.76) 55%, rgba(11, 11, 12, 0.35) 100%),
+        url('/enter-the-signal/0f209af7.jpeg') center/cover no-repeat,
+        radial-gradient(circle at 80% 40%, rgba(212, 175, 55, 0.22), transparent 55%),
+        var(--obsidian);
+      border-bottom: 1px solid var(--border);
+    }
+
+    .hero-inner {
+      max-width: 660px;
+      position: relative;
+      z-index: 2;
+    }
+
+    .pill {
+      display: inline-block;
+      font-size: 0.75rem;
+      letter-spacing: 1.8px;
+      text-transform: uppercase;
+      color: var(--gold);
+      border: 1px solid var(--border);
+      background: rgba(212, 175, 55, 0.08);
+      padding: 5px 14px;
+      border-radius: 999px;
+      margin-bottom: 18px;
+    }
+
+    .hero h1 {
+      font-size: clamp(2.4rem, 6vw, 4.2rem);
+      line-height: 1.06;
+      font-weight: 800;
+      letter-spacing: -1px;
+      margin-bottom: 18px;
+    }
+
+    .hero p {
+      color: #d4d4dc;
+      font-size: 1.05rem;
+      margin-bottom: 28px;
+      max-width: 560px;
+    }
+
+    .btn-row {
+      display: flex;
+      gap: 14px;
+      flex-wrap: wrap;
+    }
+
+    .btn-gold {
+      background: var(--gold);
+      color: var(--obsidian);
+      border: none;
+      padding: 12px 24px;
+      border-radius: 8px;
+      font-weight: 700;
+      text-decoration: none;
+      cursor: pointer;
+      font-size: 0.92rem;
+      transition: background 0.2s ease;
+    }
+
+    .btn-gold:hover { background: var(--gold-light); }
+
+    .btn-outline {
+      background: rgba(20, 20, 22, 0.7);
+      color: var(--text-main);
+      border: 1px solid var(--border);
+      padding: 12px 24px;
+      border-radius: 8px;
+      font-weight: 600;
+      text-decoration: none;
+      cursor: pointer;
+      font-size: 0.92rem;
+      transition: all 0.2s ease;
+    }
+
+    .btn-outline:hover {
+      border-color: var(--gold);
+      color: var(--gold);
+    }
+
+    /* Sections */
+    .container {
+      max-width: 1200px;
+      margin: 0 auto;
+      padding: 64px 32px;
+    }
+
+    .section-head {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-end;
+      gap: 16px;
+      margin-bottom: 28px;
+      flex-wrap: wrap;
+    }
+
+    .section-head h2 {
+      font-size: 1.75rem;
+      font-weight: 700;
+    }
+
+    .section-head p {
+      color: var(--text-muted);
+      font-size: 0.92rem;
+    }
+
+    /* Grids */
+    .grid-3 {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(290px, 1fr));
+      gap: 24px;
+    }
+
+    .card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+      transition: transform 0.2s ease, border-color 0.2s ease;
+    }
+
+    .card:hover {
+      transform: translateY(-4px);
+      border-color: var(--gold);
+    }
+
+    .card-img {
+      width: 100%;
+      aspect-ratio: 1 / 1;
+      object-fit: cover;
+      background: var(--surface-elevated);
+      display: block;
+    }
+
+    /* Shown in place of an image file that hasn't been uploaded yet */
+    .img-placeholder {
+      width: 100%;
+      aspect-ratio: 1 / 1;
+      display: grid;
+      place-items: center;
+      padding: 20px;
+      text-align: center;
+      color: var(--gold);
+      font-weight: 800;
+      letter-spacing: 2px;
+      text-transform: uppercase;
+      font-size: 0.85rem;
+      background:
+        radial-gradient(circle at 30% 30%, rgba(212, 175, 55, 0.25), transparent 60%),
+        linear-gradient(135deg, var(--surface-elevated), var(--obsidian));
+    }
+
+    .card-body {
+      padding: 20px;
+      display: flex;
+      flex-direction: column;
+      flex: 1;
+    }
+
+    .tag {
+      color: var(--gold);
+      font-size: 0.72rem;
+      text-transform: uppercase;
+      letter-spacing: 1.4px;
+      margin-bottom: 6px;
+      font-weight: 700;
+    }
+
+    .card h3 {
+      font-size: 1.15rem;
+      margin-bottom: 6px;
+    }
+
+    .card .meta {
+      color: var(--text-muted);
+      font-size: 0.88rem;
+      margin-bottom: 16px;
+      flex: 1;
+    }
+
+    .card-bottom {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding-top: 14px;
+      border-top: 1px solid rgba(255, 255, 255, 0.06);
+      gap: 10px;
+    }
+
+    .price {
+      font-weight: 700;
+      color: var(--gold-light);
+      font-size: 1rem;
+    }
+
+    /* Scout Feed + Living Chart */
+    .scout-box {
+      background: var(--surface);
+      border: 1px solid var(--gold);
+      border-radius: 14px;
+      padding: 20px 24px;
+      margin-bottom: 28px;
+      display: flex;
+      align-items: center;
+      gap: 16px;
+    }
+
+    .scout-badge {
+      width: 44px;
+      height: 44px;
+      border-radius: 50%;
+      background: var(--gold);
+      color: var(--obsidian);
+      font-weight: 800;
+      display: grid;
+      place-items: center;
+      flex-shrink: 0;
+    }
+
+    .chart-rows {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+
+    .chart-row {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 16px 20px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 14px;
+      flex-wrap: wrap;
+    }
+
+    .chart-left {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+    }
+
+    .rank {
+      font-size: 1.25rem;
+      font-weight: 800;
+      color: var(--gold);
+      min-width: 28px;
+    }
+
+    .vote-meta {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .vote-pill {
+      font-size: 0.85rem;
+      color: var(--gold-light);
+      background: rgba(212, 175, 55, 0.08);
+      border: 1px solid var(--border);
+      padding: 6px 12px;
+      border-radius: 8px;
+    }
+
+    /* Modal / Drawer */
+    .drawer-backdrop {
+      position: fixed;
+      inset: 0;
+      background: rgba(0, 0, 0, 0.72);
+      display: none;
+      justify-content: flex-end;
+      z-index: 400;
+    }
+
+    .drawer-backdrop.open { display: flex; }
+
+    .drawer {
+      width: min(420px, 100%);
+      height: 100%;
+      background: var(--surface);
+      border-left: 1px solid var(--border);
+      padding: 24px;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      overflow-y: auto;
+    }
+
+    .drawer-items {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      margin: 20px 0;
+    }
+
+    .drawer-item {
+      background: var(--surface-elevated);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 12px 14px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .modal-backdrop {
+      position: fixed;
+      inset: 0;
+      background: rgba(0, 0, 0, 0.78);
+      display: none;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+      z-index: 500;
+    }
+
+    .modal-backdrop.open { display: flex; }
+
+    .modal {
+      background: var(--surface);
+      border: 1px solid var(--gold);
+      border-radius: 14px;
+      max-width: 640px;
+      width: 100%;
+      max-height: 85vh;
+      overflow-y: auto;
+      padding: 26px;
+    }
+
+    pre.lyrics {
+      white-space: pre-wrap;
+      background: var(--obsidian);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 16px;
+      color: #e4e4ec;
+      font-size: 0.88rem;
+      margin: 14px 0 20px;
+    }
+
+    footer {
+      border-top: 1px solid var(--border);
+      padding: 36px 32px;
+      text-align: center;
+      color: var(--text-muted);
+      font-size: 0.85rem;
+    }
+
+    @media (max-width: 600px) {
+      nav { padding: 14px 18px; }
+      .hero { padding: 48px 20px; min-height: 70vh; }
+      .container { padding: 48px 20px; }
+    }
+  </style>
+</head>
+<body>
+
+  <nav>
+    <a href="/halo" class="brand">HALO MUSIC WORLD</a>
+    <ul class="nav-links">
+      <li><a href="#shop">Direct Shop</a></li>
+      <li><a href="#personas">Artists &amp; Personas</a></li>
+      <li><a href="#chart">Living Chart</a></li>
+      <li><a href="/obsidian/?song=owen-anthony-all-about-you-tonight&amp;t=303" target="_blank" rel="noopener">Obsidian Gateway</a></li>
+    </ul>
+    <button class="bag-btn" id="openBagBtn" type="button">Catalog Bag (<span id="bagCount">0</span>)</button>
+  </nav>
+
+  <header class="hero">
+    <div class="hero-inner">
+      <span class="pill">Sovereign Ecosystem • Direct-To-Fan</span>
+      <h1>Enter the signal.</h1>
+      <p>Listen to available previews, explore artist-approved links, and follow the music straight into the independent HALO catalog—built for true artist sovereignty and direct connection.</p>
+      <div class="btn-row">
+        <a href="#shop" class="btn-gold">Enter Shop &amp; Stems</a>
+        <a href="/satellites/catalog-lab/public/" target="_blank" rel="noopener" class="btn-outline">Open Catalog Lab</a>
+      </div>
+    </div>
+  </header>
+
+  <main>
+    <!-- DIRECT SHOP -->
+    <section class="container" id="shop">
+      <div class="section-head">
+        <div>
+          <h2>Direct Catalog &amp; Master Releases</h2>
+          <p>Instant catalog updates with local bag persistence—no waiting on static rebuilds for fan actions.</p>
+        </div>
+      </div>
+
+      <div class="grid-3" id="shopGrid"></div>
+    </section>
+
+    <!-- ARTISTS & PERSONAS -->
+    <section class="container" id="personas">
+      <div class="section-head">
+        <div>
+          <h2>Artists &amp; Ecosystem Personas</h2>
+          <p>Expanding HALO's sonic range from warm acoustic storytelling to late-night club energy.</p>
+        </div>
+      </div>
+
+      <div class="grid-3">
+        <article class="card">
+          <img data-img="76b8bdd5-e2f4-4c3d-8ad5-6ce65a04f6d5.webp" alt="Anna Jayne in sunlit studio" class="card-img" data-placeholder="Anna Jayne" />
+          <div class="card-body">
+            <span class="tag">Acoustic &amp; Indie Electronic</span>
+            <h3>Anna Jayne</h3>
+            <p class="meta">Raised around acoustic strings and slow mornings; writes unvarnished songs like <em>"Blue Ink &amp; Coffee"</em> and collaborates on <em>"I Love You When You're Salty."</em></p>
+            <div class="card-bottom">
+              <span class="price">104 BPM</span>
+              <button class="btn-outline" id="openAnnaLyricsBtn" type="button">Read Bio &amp; Lyrics</button>
+            </div>
+          </div>
+        </article>
+
+        <article class="card">
+          <img data-img="0f209af7.jpeg" alt="Obsidian Saxophone Persona" class="card-img" data-placeholder="Owen Anthony" />
+          <div class="card-body">
+            <span class="tag">Founder &amp; Live Brass</span>
+            <h3>Owen Anthony</h3>
+            <p class="meta">Architect of HALO Music World, blending deep house, Afro house, live saxophone, and cryptographic master provenance.</p>
+            <div class="card-bottom">
+              <span class="price">Sovereign Catalog</span>
+              <a href="/obsidian/?song=owen-anthony-all-about-you-tonight&amp;t=303" target="_blank" rel="noopener" class="btn-outline">Open Signal</a>
+            </div>
+          </div>
+        </article>
+
+        <article class="card">
+          <img data-img="dj-turntable-night-club-dj-turntable-night-club-161903711.webp" alt="Club DJ Turntables" class="card-img" data-placeholder="Club &amp; Mix" />
+          <div class="card-body">
+            <span class="tag">Late-Night Mix &amp; Club</span>
+            <h3>Club &amp; Mix Rotation</h3>
+            <p class="meta">High-energy deck blends, stem remixes, and night-club transitions designed for DJs and direct-to-fan mix rooms.</p>
+            <div class="card-bottom">
+              <span class="price">122 BPM</span>
+              <a href="#chart" class="btn-outline">Vote on Chart</a>
+            </div>
+          </div>
+        </article>
+      </div>
+    </section>
+
+    <!-- LIVING CHART & SCOUT AGENT -->
+    <section class="container" id="chart">
+      <div class="section-head">
+        <div>
+          <h2>Global Living Chart &amp; Scout Feed</h2>
+          <p>Transparent fan participation—votes save immediately in your browser.</p>
+        </div>
+      </div>
+
+      <div class="scout-box">
+        <div class="scout-badge">AI</div>
+        <div>
+          <strong style="color: var(--gold); font-size: 0.85rem; letter-spacing: 1px; text-transform: uppercase;">HALO Scout Agent</strong>
+          <p id="scoutMessage" aria-live="polite" style="font-size: 0.95rem; margin-top: 2px;">"I Love You When You're Salty" and "All About You Tonight" are driving direct catalog traffic. Cast a vote to shift the live board.</p>
+        </div>
+      </div>
+
+      <div class="chart-rows" id="chartList"></div>
+    </section>
+  </main>
+
+  <!-- SLIDE-OUT BAG DRAWER -->
+  <div class="drawer-backdrop" id="bagBackdrop">
+    <aside class="drawer" aria-label="Catalog Bag">
+      <div>
+        <div style="display:flex; justify-content:space-between; align-items:center;">
+          <h3>Your HALO Bag</h3>
+          <button class="btn-outline" id="closeBagBtn" type="button" style="padding:6px 12px;">Close</button>
+        </div>
+        <div class="drawer-items" id="bagItems"></div>
+      </div>
+      <div>
+        <div style="display:flex; justify-content:space-between; margin-bottom:14px; font-weight:700;">
+          <span>Total</span>
+          <span class="price" id="bagTotal">£0.00</span>
+        </div>
+        <button class="btn-gold" id="checkoutBtn" type="button" style="width:100%;">Proceed to Direct Checkout</button>
+        <p id="checkoutStatus" aria-live="polite" style="color:var(--gold-light); font-size:0.82rem; margin-top:10px;"></p>
+      </div>
+    </aside>
+  </div>
+
+  <!-- ANNA JAYNE LYRICS MODAL -->
+  <div class="modal-backdrop" id="lyricsModalBackdrop">
+    <div class="modal" role="dialog" aria-modal="true" aria-labelledby="lyricsTitle">
+      <div style="display:flex; justify-content:space-between; align-items:center;">
+        <h3 id="lyricsTitle">Anna Jayne — "Blue Ink &amp; Coffee"</h3>
+        <button class="btn-outline" id="closeLyricsBtn" type="button" style="padding:6px 12px;">Close</button>
+      </div>
+      <p style="color:var(--text-muted); font-size:0.88rem; margin-top:6px;">
+        Backstory: Raised around workshop timber, old records, and quiet mornings—building songs on her own terms without corporate gatekeepers.
+      </p>
+      <pre class="lyrics">[Verse 1]
+The morning light is cutting through the glass
+A stack of records spinning on the floor
+I'm writing lines I know won't ever pass
+For radio, but that's what living's for
+You left a note beside the boiling tea
+A crooked word in blue upon the page
+It's quiet here, just you and wood and me
+Far away from any corporate stage
+
+[Chorus]
+I love the way the coffee cools right down
+While we’re talking about nothing at all
+We built a little world outside the town
+Where the heavy industry can't touch our wall
+A little bit of friction, a little bit of grace
+We carved our own quiet space
+Yeah, we carved our own quiet space
+
+[Outro]
+Haylo, haylo, halo
+Let the raw strings ring
+Music is everything</pre>
+    </div>
+  </div>
+
+  <footer>
+    <p>HALO Music World LTD • Sovereign Direct-to-Fan Architecture • Enter the Signal</p>
+  </footer>
+
+  <script>
+    const ASSET_BASE = '/enter-the-signal/';
+
+    const PRODUCTS = [
+      {
+        id: 'salty-master-stems',
+        title: "I Love You When You're Salty (Master + Stems)",
+        artist: 'Owen Anthony & Anna Jayne',
+        tag: 'Featured Single',
+        price: 9.99,
+        img: ASSET_BASE + 'watermarked_img_9396886770594396956.jpg',
+        url: '/obsidian/?song=owen-anthony-all-about-you-tonight&t=303'
+      },
+      {
+        id: 'all-about-you-tonight',
+        title: 'All About You Tonight (Obsidian Edition)',
+        artist: 'Owen Anthony',
+        tag: 'Signal Spotlight',
+        price: 7.99,
+        img: ASSET_BASE + 'c81e42ce-a637-4681-bd14-d73f36e34da5.webp',
+        url: '/obsidian/?song=owen-anthony-all-about-you-tonight&t=303'
+      },
+      {
+        id: 'blue-ink-coffee-pack',
+        title: 'Blue Ink & Coffee — Acoustic Stem Pack',
+        artist: 'Anna Jayne',
+        tag: 'Anna Jayne Debut',
+        price: 6.99,
+        img: ASSET_BASE + '76b8bdd5-e2f4-4c3d-8ad5-6ce65a04f6d5.webp',
+        url: '#personas'
+      }
+    ];
+
+    const DEFAULT_VOTES = {
+      'salty-master-stems': 1185,
+      'all-about-you-tonight': 1420,
+      'blue-ink-coffee-pack': 960
+    };
+
+    const STORAGE_BAG_KEY = 'halo_bag_v1';
+    const STORAGE_VOTES_KEY = 'halo_votes_v1';
+
+    function escapeHtml(value) {
+      return String(value).replace(/[&<>"']/g, ch => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[ch]));
+    }
+
+    function readStored(key, fallback) {
+      try {
+        const raw = localStorage.getItem(key);
+        return raw ? JSON.parse(raw) : fallback;
+      } catch {
+        return fallback;
+      }
+    }
+
+    // The bag keeps only product ids and quantities; titles and prices always come from PRODUCTS,
+    // so a price change here is never overridden by an old copy saved in the browser.
+    const storedBag = readStored(STORAGE_BAG_KEY, []);
+    let bag = (Array.isArray(storedBag) ? storedBag : [])
+      .filter(entry => entry && PRODUCTS.some(p => p.id === entry.id))
+      .map(entry => ({ id: entry.id, qty: Math.max(1, Math.floor(Number(entry.qty) || 1)) }));
+    let votes = Object.assign({}, DEFAULT_VOTES, readStored(STORAGE_VOTES_KEY, null) || {});
+
+    function saveState() {
+      try {
+        localStorage.setItem(STORAGE_BAG_KEY, JSON.stringify(bag));
+        localStorage.setItem(STORAGE_VOTES_KEY, JSON.stringify(votes));
+      } catch {
+        // Storage can be unavailable (private mode); the page still works for this visit.
+      }
+    }
+
+    function productFor(id) {
+      return PRODUCTS.find(p => p.id === id);
+    }
+
+    // Swap any image that fails to load (for example, not uploaded yet) for a branded placeholder tile.
+    function usePlaceholder(img) {
+      const tile = document.createElement('div');
+      tile.className = 'img-placeholder';
+      tile.setAttribute('role', 'img');
+      tile.setAttribute('aria-label', img.alt || 'Artwork coming soon');
+      tile.textContent = img.dataset.placeholder || 'HALO';
+      img.replaceWith(tile);
+    }
+
+    function watchImages(root) {
+      root.querySelectorAll('img.card-img').forEach(img => {
+        if (img.complete && img.naturalWidth === 0) usePlaceholder(img);
+        else img.addEventListener('error', () => usePlaceholder(img), { once: true });
+      });
+    }
+
+    function renderShop() {
+      const grid = document.getElementById('shopGrid');
+      grid.innerHTML = PRODUCTS.map(item => `
+        <article class="card">
+          <img src="${escapeHtml(item.img)}" alt="${escapeHtml(item.title)}" class="card-img" data-placeholder="${escapeHtml(item.tag)}" />
+          <div class="card-body">
+            <span class="tag">${escapeHtml(item.tag)}</span>
+            <h3>${escapeHtml(item.title)}</h3>
+            <p class="meta">${escapeHtml(item.artist)}</p>
+            <div class="card-bottom">
+              <span class="price">£${item.price.toFixed(2)}</span>
+              <button class="btn-gold" type="button" data-add="${escapeHtml(item.id)}">Add to Bag</button>
+            </div>
+          </div>
+        </article>
+      `).join('');
+      watchImages(grid);
+    }
+
+    function addToBag(id) {
+      if (!productFor(id)) return;
+      const existing = bag.find(entry => entry.id === id);
+      if (existing) existing.qty += 1;
+      else bag.push({ id, qty: 1 });
+      saveState();
+      renderBag();
+      openBag();
+    }
+
+    function removeFromBag(id) {
+      bag = bag.filter(entry => entry.id !== id);
+      saveState();
+      renderBag();
+    }
+
+    function renderBag() {
+      const countEl = document.getElementById('bagCount');
+      const itemsEl = document.getElementById('bagItems');
+      const totalEl = document.getElementById('bagTotal');
+
+      const totalQty = bag.reduce((sum, entry) => sum + entry.qty, 0);
+      const totalPrice = bag.reduce((sum, entry) => sum + productFor(entry.id).price * entry.qty, 0);
+
+      countEl.textContent = totalQty;
+      totalEl.textContent = `£${totalPrice.toFixed(2)}`;
+
+      if (bag.length === 0) {
+        itemsEl.innerHTML = `<p style="color:var(--text-muted); font-size:0.9rem;">Your catalog bag is empty.</p>`;
+        return;
+      }
+
+      itemsEl.innerHTML = bag.map(entry => {
+        const item = productFor(entry.id);
+        return `
+          <div class="drawer-item">
+            <div>
+              <div style="font-weight:600; font-size:0.92rem;">${escapeHtml(item.title)}</div>
+              <div style="color:var(--text-muted); font-size:0.82rem;">Qty: ${entry.qty} • £${(item.price * entry.qty).toFixed(2)}</div>
+            </div>
+            <button class="btn-outline" type="button" style="padding:4px 10px; font-size:0.78rem;" data-remove="${escapeHtml(item.id)}">Remove</button>
+          </div>
+        `;
+      }).join('');
+    }
+
+    function renderChart() {
+      const listEl = document.getElementById('chartList');
+      const sorted = [...PRODUCTS].sort((a, b) => (votes[b.id] || 0) - (votes[a.id] || 0));
+
+      listEl.innerHTML = sorted.map((track, idx) => `
+        <div class="chart-row">
+          <div class="chart-left">
+            <span class="rank">${String(idx + 1).padStart(2, '0')}</span>
+            <div>
+              <h3>${escapeHtml(track.title)}</h3>
+              <p style="color:var(--text-muted); font-size:0.86rem;">${escapeHtml(track.artist)}</p>
+            </div>
+          </div>
+          <div class="vote-meta">
+            <span class="vote-pill">${(votes[track.id] || 0).toLocaleString()} Votes</span>
+            <button class="btn-gold" type="button" style="padding:8px 16px;" data-vote="${escapeHtml(track.id)}">+ Vote</button>
+          </div>
+        </div>
+      `).join('');
+    }
+
+    function voteTrack(id) {
+      const track = productFor(id);
+      if (!track) return;
+      votes[id] = (votes[id] || 0) + 1;
+      saveState();
+      renderChart();
+      document.getElementById('scoutMessage').textContent =
+        `Live boost recorded for "${track.title}" (${votes[id].toLocaleString()} total votes). Signal momentum updated.`;
+    }
+
+    const bagBackdrop = document.getElementById('bagBackdrop');
+    function openBag() { bagBackdrop.classList.add('open'); }
+    function closeBag() { bagBackdrop.classList.remove('open'); }
+
+    document.getElementById('shopGrid').addEventListener('click', e => {
+      const btn = e.target.closest('[data-add]');
+      if (btn) addToBag(btn.dataset.add);
+    });
+    document.getElementById('bagItems').addEventListener('click', e => {
+      const btn = e.target.closest('[data-remove]');
+      if (btn) removeFromBag(btn.dataset.remove);
+    });
+    document.getElementById('chartList').addEventListener('click', e => {
+      const btn = e.target.closest('[data-vote]');
+      if (btn) voteTrack(btn.dataset.vote);
+    });
+
+    document.getElementById('openBagBtn').addEventListener('click', openBag);
+    document.getElementById('closeBagBtn').addEventListener('click', closeBag);
+    bagBackdrop.addEventListener('click', e => { if (e.target === bagBackdrop) closeBag(); });
+
+    document.getElementById('checkoutBtn').addEventListener('click', () => {
+      const statusEl = document.getElementById('checkoutStatus');
+      if (bag.length === 0) {
+        statusEl.textContent = 'Add a release or stem pack first.';
+        return;
+      }
+      // Replace this block with your Stripe Checkout / Netlify Function redirect when ready
+      statusEl.textContent = 'Order staged locally. Connect your Stripe Checkout URL or /.netlify/functions/create-checkout handler here.';
+    });
+
+    const lyricsModal = document.getElementById('lyricsModalBackdrop');
+    const openLyrics = () => lyricsModal.classList.add('open');
+    const closeLyrics = () => lyricsModal.classList.remove('open');
+    document.getElementById('openAnnaLyricsBtn').addEventListener('click', openLyrics);
+    document.getElementById('closeLyricsBtn').addEventListener('click', closeLyrics);
+    lyricsModal.addEventListener('click', e => { if (e.target === lyricsModal) closeLyrics(); });
+
+    document.addEventListener('keydown', e => {
+      if (e.key !== 'Escape') return;
+      closeBag();
+      closeLyrics();
+    });
+
+    // Persona artwork is attached here (not in the markup) so pages stay valid before the files are uploaded.
+    document.querySelectorAll('#personas img[data-img]').forEach(img => { img.src = ASSET_BASE + img.dataset.img; });
+    watchImages(document.getElementById('personas'));
+    renderShop();
+    renderBag();
+    renderChart();
+  </script>
+</body>
+</html>

@@ -65,6 +65,7 @@
       || (release.storefront?.hasPlayableStream ? safeUrl(release.streamUrl) : "");
     return {
       id: String(release.id),
+      songId: String(catalog.songId || ""),
       title: catalog.title || release.title || "Untitled",
       artist: catalog.artistName || release.artist || "HALO artist",
       album: release.albumTitle || "",

@@ -29,6 +29,7 @@
   <link rel="stylesheet" href="/music/local-signal.css">
   <link rel="stylesheet" href="/music/signal-map.css">
   <link rel="stylesheet" href="/halo-hud.css">
+  <link rel="stylesheet" href="/halo-living-player/living-player.css">
 </head>
 <body data-shop-path="/music/">
   <a class="catalog-skip-link" href="#allReleasesTitle">Skip to song catalog</a>
@@ -72,6 +73,8 @@
         <span></span><span></span><span></span>
       </div>
     </section>
+
+    <div class="music-living" id="musicLiving" aria-label="Living player"></div>
 
     <halo-video-discovery id="video-discovery" surface="music"></halo-video-discovery>
     <section class="chart-section" id="living-chart" aria-labelledby="chartTitle">
@@ -220,6 +223,7 @@
   <script src="/music/genre-rooms.js" defer></script>
   <script src="/music/music.js" defer></script>
   <script src="/music/featuredPlayer.js" defer></script>
+  <script type="module" src="/music/living-stage.js"></script>
   <link rel="stylesheet" href="/video-discovery.css">
   <script type="module" src="/video-discovery.js"></script>
   <script type="module" src="/music/signal-map.js"></script>

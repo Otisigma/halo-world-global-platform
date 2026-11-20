@@ -1,4 +1,5 @@
-export function createLivingVisualizer({ audio, button, status, field, window, document }) {
+// onFrame(bass, treble) is optional: other visuals (e.g. the WebGL player card) can follow the same levels.
+export function createLivingVisualizer({ audio, button, status, field, window, document, onFrame = null }) {
   const motion = window.matchMedia("(prefers-reduced-motion: reduce)");
   let context = null, stream = null, source = null, analyser = null, data = null, frame = null;
   let active = false, generation = 0, silentSince = null, signalSeen = false;
@@ -6,6 +7,7 @@ export function createLivingVisualizer({ audio, button, status, field, window, d
   function resetVisual() {
     field.style.setProperty("--bass", "0");
     field.style.setProperty("--treble", "0");
+    onFrame?.(0, 0);
   }
   function stopFrames() {
     if (frame !== null) window.cancelAnimationFrame(frame);
@@ -42,6 +44,7 @@ export function createLivingVisualizer({ audio, button, status, field, window, d
     const bass = average(40, 250), treble = average(2000, 8000);
     field.style.setProperty("--bass", bass.toFixed(3));
     field.style.setProperty("--treble", treble.toFixed(3));
+    onFrame?.(bass, treble);
     if (bass > 0 || treble > 0) {
       silentSince = null;
       if (signalSeen !== true) status.textContent = "Visualizer responding to audio frequencies.";
@@ -115,5 +118,9 @@ export function createLivingVisualizer({ audio, button, status, field, window, d
   if (motion.addEventListener) motion.addEventListener("change", onMotionChange);
   else motion.addListener(onMotionChange);
   window.addEventListener("pagehide", () => dispose());
-  return { reset: () => { if (active || context) dispose("Release changed. Start playback and enable the visualizer again."); } };
+  return {
+    reset: () => { if (active || context) dispose("Release changed. Start playback and enable the visualizer again."); },
+    enable: () => (active ? Promise.resolve() : enable()),
+    get active() { return active; }
+  };
 }

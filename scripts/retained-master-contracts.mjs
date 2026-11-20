@@ -211,6 +211,24 @@ test("public sharing is opt-in; owner endpoints reject cross-owner, origin, inva
   assert.equal((await handler(request("manifest"))).status, 409);
 });
 
+test("public-latest only reveals a shared, ready, signature-valid snapshot for a master", async () => {
+  const { state, deps, handler } = fixture();
+  const receipt = await captureRegisteredMaster(deps);
+  const latest = (song = songId, version = versionId) => handler(new Request(
+    `https://halo.test/api/master-snapshots?action=public-latest&songId=${song}&versionId=${version}`));
+  state.user = null;
+  assert.equal((await latest("not-an-id")).status, 400);
+  assert.equal((await latest()).status, 404, "unshared snapshots stay private");
+  state.records.get(receipt.recordId).published_at = new Date().toISOString();
+  const shared = await (await latest()).json();
+  assert.equal(shared.shared, true);
+  assert.equal(shared.record.recordId, receipt.recordId);
+  assert.deepEqual(Object.keys(shared).sort(), ["limitation", "record", "shared", "signature"]);
+  assert.doesNotMatch(JSON.stringify(shared), /owner-1|storage_key|storage_version_id|test-secret|snapshots\//);
+  state.records.get(receipt.recordId).signature = Buffer.alloc(64).toString("base64");
+  assert.equal((await latest()).status, 404, "a record failing signature checks is never shown as verified");
+});
+
 test("browser independently verifies signatures and compares local bytes with retained trusted keys", async () => {
   const now = new Date(), until = new Date(now.getTime() + 86400000);
   const record = { schemaVersion: 1, recordId, songId, versionId, keyId: "v1", sha256: hash(bytes), byteSize: 6,

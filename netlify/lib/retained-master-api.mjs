@@ -36,6 +36,24 @@ export function createRetainedMasterHandler(deps) {
         }
         return json({ ...envelope, limitation: SNAPSHOT_LIMITATION });
       }
+      // Lets public players find the newest snapshot an owner chose to share for a master.
+      // Only shared, ready and signature-valid records are returned; nothing private is exposed.
+      if (request.method === "GET" && action === "public-latest") {
+        const songId = params.get("songId") || "";
+        const versionId = params.get("versionId") || "";
+        if (!ID.test(songId) || !ID.test(versionId)) return json({ message: "Song and master IDs required" }, 400);
+        const rows = await db.sql`
+          SELECT * FROM halo_retained_master_snapshots
+          WHERE song_id = ${songId} AND version_id = ${versionId} AND status = 'ready' AND published_at IS NOT NULL
+          ORDER BY published_at DESC, created_at DESC LIMIT 5
+        `;
+        if (!rows.length) return json({ shared: false, message: "No shared signed snapshot for this master" }, 404);
+        const keys = deps.publicKeys();
+        const row = rows.find(item => verifySnapshot({ record: item.record, signature: item.signature }, keys)
+          && item.record.recordId === item.id && item.record.songId === item.song_id && item.record.versionId === item.version_id);
+        if (!row) return json({ shared: false, message: "No shared signed snapshot for this master" }, 404);
+        return json({ shared: true, record: row.record, signature: row.signature, limitation: SNAPSHOT_LIMITATION });
+      }
       const user = await deps.user();
       if (!user?.id) return json({ message: "Sign in required" }, 401);
       const owner = (await deps.membership(db, user)).member_id;

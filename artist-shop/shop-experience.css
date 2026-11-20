@@ -92,13 +92,85 @@
   min-height: min(62vh, 560px);
   display: flex; align-items: center;
   padding: clamp(3rem, 8vw, 5rem) clamp(1.2rem, 4vw, 3rem);
-  background:
-    linear-gradient(90deg, color-mix(in srgb, var(--obsidian) 97%, transparent) 0%, color-mix(in srgb, var(--obsidian) 82%, transparent) 55%, color-mix(in srgb, var(--obsidian) 35%, transparent) 100%),
-    url("/assets/enter-the-signal.webp") center / cover no-repeat,
-    var(--obsidian);
+  overflow: hidden;
+  isolation: isolate;
+  background: var(--obsidian);
   border-bottom: 1px solid var(--gold-line);
 }
-.signal-hero-inner { max-width: 680px; }
+/* Header image layer. The artist picks an upload, image link or release cover; otherwise the
+   theme backdrop shows. The backdrop artwork has its own lettering baked in, so it sits on the
+   right and fades out before the hero copy to avoid doubled "Enter the signal." text. */
+.signal-hero-bg {
+  position: absolute; inset: 0; z-index: 0;
+  background-size: cover; background-repeat: no-repeat; background-position: 50% 50%;
+}
+.signal-hero[data-header-source="theme"] .signal-hero-bg {
+  left: auto; width: min(46%, 640px);
+  background-image: url("/assets/enter-the-signal.webp");
+  background-position: 100% 50% !important;
+  -webkit-mask-image: linear-gradient(90deg, transparent 0%, #000 50%);
+  mask-image: linear-gradient(90deg, transparent 0%, #000 50%);
+}
+.signal-hero-scrim {
+  position: absolute; inset: 0; z-index: 1; pointer-events: none;
+  --o: var(--halo-scrim-opacity, .62);
+  background:
+    linear-gradient(90deg, rgba(10, 10, 14, calc(var(--o) + .2)) 0%, rgba(10, 10, 14, var(--o)) 55%, rgba(10, 10, 14, calc(var(--o) * .55)) 100%),
+    linear-gradient(to bottom, rgba(10, 10, 14, calc(var(--o) * .4)), rgba(10, 10, 14, calc(var(--o) * .75)));
+  background:
+    linear-gradient(90deg, color-mix(in srgb, var(--obsidian) calc((var(--o) + .2) * 100%), transparent) 0%, color-mix(in srgb, var(--obsidian) calc(var(--o) * 100%), transparent) 55%, color-mix(in srgb, var(--obsidian) calc(var(--o) * 55%), transparent) 100%),
+    linear-gradient(to bottom, color-mix(in srgb, var(--obsidian) calc(var(--o) * 40%), transparent), color-mix(in srgb, var(--obsidian) calc(var(--o) * 75%), transparent));
+}
+.signal-hero[data-header-source="theme"] .signal-hero-scrim {
+  background: linear-gradient(90deg, var(--obsidian) 0%, color-mix(in srgb, var(--obsidian) 70%, transparent) 60%, color-mix(in srgb, var(--obsidian) 25%, transparent) 100%);
+}
+.signal-hero-inner { position: relative; z-index: 2; max-width: 680px; }
+.signal-hero:not([data-header-source="theme"]) h1,
+.signal-hero:not([data-header-source="theme"]) .signal-hero-inner > p:not(.signal-eyebrow) { text-shadow: 0 2px 18px rgba(0, 0, 0, .55); }
+.header-owner-bar {
+  position: absolute; z-index: 3; right: clamp(.8rem, 3vw, 2rem); bottom: clamp(.8rem, 2.4vw, 1.4rem);
+  display: flex; align-items: center; gap: .6rem; flex-wrap: wrap; justify-content: flex-end;
+}
+.header-owner-bar[hidden] { display: none; }
+.header-status {
+  padding: .3rem .7rem; border-radius: 999px; font-size: .72rem; max-width: 260px;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  background: color-mix(in srgb, var(--obsidian) 80%, transparent); border: 1px solid var(--obs-hairline); color: var(--obs-muted);
+}
+.header-owner-bar .signal-btn-outline { padding: .42rem .85rem; font-size: .78rem; background: color-mix(in srgb, var(--obsidian) 72%, transparent); }
+.header-panel {
+  position: fixed; top: 84px; right: clamp(.6rem, 3vw, 2rem); z-index: 420;
+  width: min(420px, calc(100% - 1.2rem)); max-height: calc(100vh - 100px); overflow-y: auto;
+  padding: 1.1rem 1.2rem 1.2rem;
+  background: var(--obsidian-2); color: var(--obs-text);
+  border: 1px solid var(--gold-line); border-radius: 14px;
+  box-shadow: 0 18px 50px rgba(0,0,0,.45);
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+}
+.header-panel[hidden] { display: none; }
+.header-panel h2 { font-size: 1.15rem; margin: 0; }
+.header-panel-block { border-top: 1px solid var(--obs-hairline); padding: .2rem 0 .9rem; }
+.header-panel select, .header-panel input[type="url"] {
+  width: 100%; min-width: 0; padding: .5rem .65rem; border-radius: 8px; font: inherit; font-size: .85rem;
+  background: var(--obsidian); color: var(--obs-text); border: 1px solid var(--gold-line);
+}
+.header-file { display: grid; gap: .35rem; font-size: .8rem; color: var(--obs-muted); margin-bottom: .6rem; }
+.header-file input { font-size: .8rem; color: var(--obs-text); }
+.header-row { display: flex; gap: .5rem; }
+.header-row .signal-btn-outline, .header-panel-block > .signal-btn-outline, .header-presets .signal-btn-outline { padding: .42rem .8rem; font-size: .78rem; flex: none; }
+.header-frame { display: grid; gap: .7rem; padding-top: .9rem; }
+.header-frame label { display: grid; gap: .35rem; font-size: .8rem; color: var(--obs-muted); }
+.header-frame input[type="range"] { width: 100%; accent-color: var(--gold); }
+.header-presets { display: flex; gap: .45rem; flex-wrap: wrap; }
+.header-hint { color: var(--obs-muted); font-size: .78rem; margin: .5rem 0 0; }
+.header-hint[hidden] { display: none; }
+.header-panel .signal-tag { margin-bottom: .2rem; }
+@media (max-width: 760px) {
+  .signal-hero[data-header-source="theme"] .signal-hero-bg { width: 100%; opacity: .55; -webkit-mask-image: none; mask-image: none; }
+  .signal-hero[data-header-source="theme"] .signal-hero-scrim { background: linear-gradient(90deg, color-mix(in srgb, var(--obsidian) 92%, transparent), color-mix(in srgb, var(--obsidian) 55%, transparent)); }
+  .signal-hero:has(.header-owner-bar:not([hidden])) { padding-bottom: 4.6rem; }
+  .header-owner-bar { left: clamp(.8rem, 3vw, 2rem); justify-content: flex-start; }
+}
 .signal-eyebrow {
   display: inline-block; margin: 0 0 1rem; padding: .3rem .9rem;
   border: 1px solid var(--gold-line); border-radius: 999px; background: var(--gold-soft);
@@ -386,6 +458,6 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .signal-card, .video-card, .bag-drawer, .bag-backdrop, .signal-hero, .signal-band, .theme-panel { transition: none; }
+  .signal-card, .video-card, .bag-drawer, .bag-backdrop, .signal-hero, .signal-band, .theme-panel, .header-panel { transition: none; }
   .eq i, .bag-button.is-pulsing { animation: none; }
 }

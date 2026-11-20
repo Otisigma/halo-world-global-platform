@@ -44,6 +44,7 @@
   <link rel="stylesheet" href="/halo-living-player/living-player.css">
   <script type="module" src="/artist-shop/shop-theme.js"></script>
   <script type="module" src="/artist-shop/library-living.js"></script>
+  <script type="module" src="/artist-shop/shop-header.js"></script>
 </head>
 <body>
   <a class="skip-link" href="#catalog">Skip to the shop</a>
@@ -84,8 +85,10 @@
   </header>
 
   <main>
-    <section class="signal-hero" aria-labelledby="signal-hero-title">
-      <div class="signal-hero-inner">
+    <section class="signal-hero halo-hero" id="signal-hero" data-header-source="theme" aria-labelledby="signal-hero-title">
+      <div class="signal-hero-bg" data-header-bg aria-hidden="true"></div>
+      <div class="signal-hero-scrim" data-header-scrim aria-hidden="true"></div>
+      <div class="signal-hero-inner halo-hero__content">
         <p class="signal-eyebrow">UK Sterling (£) · Direct-to-fan catalog</p>
         <h1 id="signal-hero-title">Enter the signal.</h1>
         <p>Play artist previews back-to-back, watch the visuals, and take the music home straight from the independent HALO catalog—priced in UK pounds.</p>
@@ -95,6 +98,68 @@
           <a class="signal-btn-outline" href="#video-gallery">Video Gallery</a>
         </div>
       </div>
+      <div class="header-owner-bar" data-header-owner hidden>
+        <span class="header-status" data-header-status>Header: Theme backdrop</span>
+        <button class="signal-btn-outline" type="button" data-header-edit aria-expanded="false" aria-controls="header-panel">Change header</button>
+      </div>
+    </section>
+
+    <section class="header-panel" id="header-panel" role="dialog" aria-modal="false" aria-labelledby="header-panel-title" hidden>
+      <div class="theme-panel-top">
+        <div>
+          <p class="signal-tag">Shop header</p>
+          <h2 id="header-panel-title">Change the header image<span data-header-artist></span>.</h2>
+        </div>
+        <button class="theme-close" type="button" data-header-close aria-label="Close header settings">×</button>
+      </div>
+      <p class="theme-panel-note">Saved for this artist's shop only, so each of your artist pages keeps its own header. Visitors see changes straight away.</p>
+
+      <div class="header-panel-block">
+        <p class="theme-group-label">Upload an image</p>
+        <label class="header-file">
+          <span>Choose a wide image (JPEG, PNG or WebP, up to 4 MB)</span>
+          <input type="file" accept="image/jpeg,image/png,image/webp" data-header-file>
+        </label>
+        <div class="header-row">
+          <label class="visually-hidden" for="header-url">Image link</label>
+          <input type="url" id="header-url" inputmode="url" placeholder="…or paste an https:// image link" data-header-url>
+          <button class="signal-btn-outline" type="button" data-header-apply-url>Use link</button>
+        </div>
+      </div>
+
+      <div class="header-panel-block">
+        <p class="theme-group-label">Use an album / track cover</p>
+        <label class="visually-hidden" for="header-cover">Release cover</label>
+        <select id="header-cover" data-header-cover>
+          <option value="">Pick an album / song cover…</option>
+        </select>
+        <p class="header-hint" data-header-cover-empty hidden>No release covers yet. Add artwork to this artist's songs in the Song Catalog to use them here.</p>
+      </div>
+
+      <div class="header-panel-block header-frame">
+        <label>Focal point
+          <select data-header-focal>
+            <option value="top">Top</option>
+            <option value="center">Centre</option>
+            <option value="bottom">Bottom</option>
+            <option value="left">Left</option>
+            <option value="right">Right</option>
+          </select>
+        </label>
+        <label>Dim the image
+          <input type="range" min="0.1" max="0.92" step="0.01" value="0.62" data-header-scrim-range>
+        </label>
+        <div class="header-presets" role="group" aria-label="Dim presets">
+          <button class="signal-btn-outline" type="button" data-header-scrim-preset="0.35">Light</button>
+          <button class="signal-btn-outline" type="button" data-header-scrim-preset="0.62">Balanced</button>
+          <button class="signal-btn-outline" type="button" data-header-scrim-preset="0.82">Strong</button>
+        </div>
+      </div>
+
+      <div class="header-panel-block">
+        <button class="signal-btn-outline" type="button" data-header-reset>Reset to theme backdrop</button>
+      </div>
+      <p class="theme-status" data-header-panel-status role="status"></p>
     </section>
 
     <aside class="prototype-notice" aria-label="Artist Shop preview status">

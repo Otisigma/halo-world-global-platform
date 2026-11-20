@@ -401,9 +401,16 @@
       el.stage.hidden = true;
       el.empty.hidden = false;
       renderEmpty();
+      announceArtist(artist);
       return;
     }
     render();
+    announceArtist(data?.artist?.slug || "");
+  }
+
+  // Lets the rest of the shop (e.g. the hero header) follow the artist shown here.
+  function announceArtist(slug) {
+    window.dispatchEvent(new CustomEvent("halo:shop-artist", { detail: { slug: String(slug || ""), reload: true } }));
   }
 
   // Signing in or out changes who can edit (and which shop is the default).

@@ -142,6 +142,7 @@
 .library-progress { grid-area: progress; display: flex; align-items: center; gap: .8rem; }
 .library-progress input { flex: 1; accent-color: var(--gold); }
 .library-progress span { font-family: var(--mono, monospace); font-size: .72rem; color: var(--obs-muted); white-space: nowrap; }
+.library-living { margin: 1rem 0 1.25rem; }
 .library-tools { display: flex; gap: .6rem; flex-wrap: wrap; margin-bottom: 1rem; }
 .library-list { display: flex; flex-direction: column; gap: .5rem; max-height: 520px; overflow-y: auto; padding-right: .2rem; }
 .library-row {

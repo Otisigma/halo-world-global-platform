@@ -309,6 +309,13 @@
     lib.dockPlay.setAttribute("aria-label", playing ? "Pause" : "Play");
     lib.dockTitle.textContent = track ? `${track.title} — ${track.artist}` : "";
     lib.dock.hidden = !track;
+    // Feeds the living player card (WebGL stage, synced lyrics, provenance badge).
+    if (track && track.id !== libState.livingId) {
+      libState.livingId = track.id;
+      window.dispatchEvent(new CustomEvent("halo:library-track", { detail: {
+        releaseId: track.live ? track.id : "", title: track.title, artist: track.artist, artwork: track.artwork
+      } }));
+    }
     if ("mediaSession" in navigator && track) {
       navigator.mediaSession.metadata = new MediaMetadata({ title: track.title, artist: track.artist, album: "HALO Always-On Library", artwork: track.artwork ? [{ src: track.artwork }] : [] });
     }

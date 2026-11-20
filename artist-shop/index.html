@@ -40,6 +40,8 @@
   <script src="/artist-shop/catalog-tracks.js" defer></script>
   <link rel="stylesheet" href="/artist-shop/shop-experience.css">
   <script src="/artist-shop/shop-experience.js" defer></script>
+  <link rel="stylesheet" href="/halo-living-player/living-player.css">
+  <script type="module" src="/artist-shop/library-living.js"></script>
 </head>
 <body>
   <a class="skip-link" href="#catalog">Skip to the shop</a>
@@ -191,6 +193,8 @@
           </div>
           <audio id="library-audio" preload="none"></audio>
         </div>
+
+        <div class="library-living" id="library-living"></div>
 
         <div class="library-tools">
           <input type="search" id="library-search" class="signal-input" placeholder="Search title, artist or BPM…" aria-label="Search the library">

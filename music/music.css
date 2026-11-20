@@ -698,3 +698,6 @@ body:has(.halo-player-bar:not([hidden])) .toast { bottom: 110px; }
 }
 @media (prefers-reduced-motion: reduce) { .return-celebration-burst { display: none; } }
 .halo-safe-space-mode .return-celebration-burst { display: none; }
+
+/* Living player card (WebGL stage, synced lyrics, verified-only provenance badge). */
+.music-living { width: min(1200px, calc(100% - 2rem)); margin: 1.5rem auto; }

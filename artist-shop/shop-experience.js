@@ -1,7 +1,7 @@
 // HALO Artist Shop experience layer: GBP-first currency toggle, Signal Drops, the saved bag,
-// the Always-On Library player and the HALO Video Gallery.
-// The library is fed by real Song Catalog tracks (see catalog-tracks.js) and the gallery by
-// /api/videos. Starter entries fill the gaps until real previews and videos are published.
+// and the Always-On Library player. The library is fed by real Song Catalog tracks (see
+// catalog-tracks.js); starter entries fill the gaps until real previews are published.
+// The artist's editable video gallery lives in shop-video-gallery.js.
 (() => {
   const BAG_KEY = "halo_uk_shop_bag_v1";
   const CURRENCY_KEY = "halo_shop_currency";
@@ -24,11 +24,6 @@
     { id: "starter-quiet-heart", title: "Quiet Heart", artist: "Owen Anthony & DJ Futon", genre: "Afro House", bpm: "122 BPM", priceMinor: 599, currency: "GBP", preview: "", artwork: "" }
   ];
 
-  const STARTER_VIDEOS = [
-    { id: "starter-signal", tag: "Obsidian Signal", title: "Enter the Signal — Brass & Gold Wave", description: "High-contrast obsidian and gold teaser introducing the HALO catalog.", thumbnailUrl: "/assets/enter-the-signal.webp" },
-    { id: "starter-studio", tag: "Sunlit Studio Cut", title: "Anna Jayne — Acoustic Strings & Mornings", description: "An intimate studio session capturing raw acoustic energy.", thumbnailUrl: "/assets/artists/owen-anthony-quicksand.jpg" },
-    { id: "starter-club", tag: "Club & Deck Reel", title: "Late-Night Deck Transitions — Club Cut", description: "Turntable and mixer visuals for DJ and club sets.", thumbnailUrl: "/assets/releases/hit-that-beat.webp" }
-  ];
 
   const $ = selector => document.querySelector(selector);
   const escapeHtml = value => String(value ?? "")
@@ -247,7 +242,7 @@
 
   function libraryTracks() {
     const live = catalogTracks.map(track => ({
-      id: track.id, title: track.title, artist: track.artist, genre: track.genre || "HALO release", bpm: track.album || "",
+      id: track.id, songId: track.songId || "", title: track.title, artist: track.artist, genre: track.genre || "HALO release", bpm: track.album || "",
       preview: track.preview, artwork: track.artwork,
       priceMinor: track.saleStatus === "for_sale" ? track.priceMinor : 0, currency: track.currency,
       bagId: purchasable.has(`track:${track.id}`) ? `track:${track.id}` : "", url: track.shopUrl, live: true
@@ -313,7 +308,7 @@
     if (track && track.id !== libState.livingId) {
       libState.livingId = track.id;
       window.dispatchEvent(new CustomEvent("halo:library-track", { detail: {
-        releaseId: track.live ? track.id : "", title: track.title, artist: track.artist, artwork: track.artwork
+        releaseId: track.live ? track.id : "", songId: track.songId || "", title: track.title, artist: track.artist, artwork: track.artwork
       } }));
     }
     if ("mediaSession" in navigator && track) {
@@ -400,92 +395,14 @@
     navigator.mediaSession.setActionHandler("previoustrack", () => step(-1));
   }
 
-  // ---------- HALO Video Gallery ----------
-  const vid = {
-    grid: $("#video-grid"), player: $("#video-player"), frame: $("#video-embed"), placeholder: $("#video-placeholder"),
-    tag: $("#video-active-tag"), title: $("#video-active-title"), desc: $("#video-active-desc"), status: $("#video-status")
-  };
-  let videos = STARTER_VIDEOS.map(video => ({ ...video, starter: true }));
-  let activeVideoId = videos[0].id;
-
-  function safeMediaUrl(value) {
-    const raw = String(value || "").trim();
-    if (raw.startsWith("/") && !raw.startsWith("//")) return raw;
-    try { const url = new URL(raw); return url.protocol === "https:" ? url.href : ""; } catch { return ""; }
-  }
-
-  function loadVideo(id, { autoplay = false } = {}) {
-    const video = videos.find(item => item.id === id);
-    if (!video) return;
-    activeVideoId = id;
-    vid.player.pause();
-    vid.player.hidden = true;
-    vid.frame.hidden = true;
-    vid.frame.removeAttribute("src");
-    vid.placeholder.hidden = true;
-    const embed = safeMediaUrl(video.embedUrl);
-    const source = safeMediaUrl(video.sourceUrl);
-    if (embed) {
-      vid.frame.src = `${embed.replace("https://www.youtube.com/", "https://www.youtube-nocookie.com/")}?rel=0${autoplay ? "&autoplay=1" : ""}`;
-      vid.frame.title = video.title;
-      vid.frame.hidden = false;
-    } else if (source && !video.starter) {
-      vid.player.poster = safeMediaUrl(video.thumbnailUrl);
-      vid.player.src = source;
-      vid.player.hidden = false;
-      if (autoplay) {
-        window.dispatchEvent(new CustomEvent("halo:shop-audio", { detail: { source: "video" } }));
-        vid.player.play().catch(() => {});
-      }
-    } else {
-      vid.placeholder.style.backgroundImage = video.thumbnailUrl ? `url("${safeMediaUrl(video.thumbnailUrl)}")` : "";
-      vid.placeholder.hidden = false;
-    }
-    vid.tag.textContent = video.tag || (video.featured ? "Featured visual" : video.artistName || "HALO visual");
-    vid.title.textContent = video.title;
-    vid.desc.textContent = video.description || (video.starter ? "This visual is being finished. It appears here as soon as it's published to the HALO Video Gallery." : "");
-    renderVideoGrid();
-  }
-
-  function renderVideoGrid() {
-    vid.grid.innerHTML = videos.map(video => {
-      const thumb = safeMediaUrl(video.thumbnailUrl);
-      return `<button class="video-card${video.id === activeVideoId ? " is-selected" : ""}" type="button" data-video="${escapeHtml(video.id)}" aria-pressed="${video.id === activeVideoId}">
-        <span class="video-card-poster"${thumb ? ` style="background-image:url('${escapeHtml(thumb)}')"` : ""}><span class="video-card-play" aria-hidden="true">${video.starter ? "Soon" : "▶"}</span></span>
-        <span class="video-card-body">
-          <span class="signal-tag">${escapeHtml(video.tag || video.artistName || "HALO visual")}</span>
-          <strong>${escapeHtml(video.title)}</strong>
-          ${video.description ? `<span>${escapeHtml(video.description)}</span>` : ""}
-        </span>
-      </button>`;
-    }).join("");
-  }
-  vid.grid.addEventListener("click", event => {
-    const card = event.target.closest("[data-video]");
-    if (!card) return;
-    loadVideo(card.dataset.video, { autoplay: true });
-    $("#video-stage").scrollIntoView({ behavior: matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth", block: "nearest" });
+  // ---------- Video ↔ track linking ----------
+  // The editable video gallery (shop-video-gallery.js) asks the library to cue a linked song.
+  window.addEventListener("halo:cue-song", event => {
+    const songId = String(event.detail?.songId || "");
+    const track = songId && libraryTracks().find(item => item.songId === songId && item.preview);
+    if (!track) { toast("This song's preview isn't published in the library yet."); return; }
+    if (libState.activeId !== track.id || lib.audio.paused) playTrack(track.id);
   });
-  vid.player.addEventListener("play", () => window.dispatchEvent(new CustomEvent("halo:shop-audio", { detail: { source: "video" } })));
-  window.addEventListener("halo:shop-audio", event => { if (event.detail?.source !== "video" && !vid.player.paused) vid.player.pause(); });
-
-  async function loadGallery() {
-    try {
-      const response = await fetch("/api/videos", { headers: { Accept: "application/json" } });
-      if (!response.ok) throw new Error(String(response.status));
-      const data = await response.json();
-      const published = (Array.isArray(data.videos) ? data.videos : []).filter(video => video && video.galleryVisible && video.id);
-      if (published.length) {
-        videos = published.map(video => ({ ...video, tag: video.featured ? "Featured visual" : video.artistName || "HALO visual" }));
-        vid.status.textContent = `${published.length} published visual${published.length === 1 ? "" : "s"}`;
-      } else {
-        vid.status.textContent = "Starter visuals · published HALO videos replace these automatically";
-      }
-    } catch {
-      vid.status.textContent = "Showing starter visuals while the gallery reconnects";
-    }
-    loadVideo(videos[0].id);
-  }
 
   // ---------- Currency toggle ----------
   const currencySelect = $("#currency-select");
@@ -522,5 +439,4 @@
   renderLibrary();
   setNowPlaying(null);
   renderBag();
-  loadGallery();
 })();

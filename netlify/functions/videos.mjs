@@ -42,6 +42,10 @@ function serializeVideo(row) {
     galleryVisible: Boolean(row.gallery_visible),
     sofaVisible: Boolean(row.sofa_visible),
     featured: Boolean(row.featured),
+    origin: row.origin === "dreamweaver" ? "dreamweaver" : "manual",
+    publishScope: row.publish_scope === "shop_only" ? "shop_only" : "halo_feed",
+    songId: row.song_id || "",
+    versionId: row.song_version_id || "",
     createdAt: new Date(row.created_at).toISOString()
   };
 }
@@ -61,6 +65,7 @@ async function loadVideos(db, artistSlug = "") {
         FROM halo_videos video
         LEFT JOIN halo_artist_pages page ON page.slug = video.artist_slug
         WHERE video.status = 'published' AND (video.gallery_visible = TRUE OR video.sofa_visible = TRUE)
+          AND COALESCE(video.publish_scope, 'halo_feed') <> 'shop_only'
         ORDER BY video.featured DESC, video.created_at DESC
         LIMIT 60
       `;
@@ -106,8 +111,23 @@ async function createVideo(request, db, user) {
   const description = cleanText(form.get("description"), 1000);
   const artistSlug = cleanText(form.get("artistSlug"), 80);
   const sourceType = form.get("sourceType") === "upload" ? "upload" : "youtube";
-  const galleryVisible = form.get("galleryVisible") !== "false";
-  const sofaVisible = form.get("sofaVisible") !== "false";
+  const origin = form.get("origin") === "dreamweaver" ? "dreamweaver" : "manual";
+  const publishScope = form.get("publishScope") === "shop_only" ? "shop_only" : "halo_feed";
+  // Shop-only videos never appear in the shared HALO gallery or sofa screens.
+  const galleryVisible = publishScope === "halo_feed" && form.get("galleryVisible") !== "false";
+  const sofaVisible = publishScope === "halo_feed" && form.get("sofaVisible") !== "false";
+  const songId = cleanText(form.get("songId"), 80);
+  const versionId = cleanText(form.get("versionId"), 80);
+  if (songId) {
+    const song = await db.sql`
+      SELECT id FROM halo_song_catalog WHERE id = ${songId} AND owner_member_id = ${membership.member_id} LIMIT 1
+    `;
+    if (!song.length) return json({ message: "Link the video to one of your own songs" }, 403);
+    if (versionId) {
+      const version = await db.sql`SELECT id FROM halo_song_versions WHERE id = ${versionId} AND song_id = ${songId} LIMIT 1`;
+      if (!version.length) return json({ message: "Choose a version of that song" }, 400);
+    }
+  }
   if (!title) return json({ message: "Give the video a title" }, 400);
 
   if (artistSlug) {
@@ -150,11 +170,11 @@ async function createVideo(request, db, user) {
     INSERT INTO halo_videos (
       id, owner_member_id, artist_slug, title, description, source_type, source_url,
       youtube_id, blob_key, content_type, source_filename, thumbnail_url,
-      gallery_visible, sofa_visible
+      gallery_visible, sofa_visible, origin, publish_scope, song_id, song_version_id
     ) VALUES (
       ${id}, ${membership.member_id}, ${artistSlug || null}, ${title}, ${description}, ${sourceType}, ${sourceUrl},
       ${parsedYouTubeId}, ${blobKey}, ${contentType}, ${sourceFilename}, ${thumbnailUrl},
-      ${galleryVisible}, ${sofaVisible}
+      ${galleryVisible}, ${sofaVisible}, ${origin}, ${publishScope}, ${songId || null}, ${(songId && versionId) || null}
     )
     RETURNING *
   `;

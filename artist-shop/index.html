@@ -40,6 +40,7 @@
   <script src="/artist-shop/catalog-tracks.js" defer></script>
   <link rel="stylesheet" href="/artist-shop/shop-experience.css">
   <script src="/artist-shop/shop-experience.js" defer></script>
+  <script src="/artist-shop/shop-video-gallery.js" defer></script>
   <link rel="stylesheet" href="/halo-living-player/living-player.css">
   <script type="module" src="/artist-shop/shop-theme.js"></script>
   <script type="module" src="/artist-shop/library-living.js"></script>
@@ -211,25 +212,85 @@
     <section class="signal-band" id="video-gallery" aria-labelledby="video-title">
       <div class="signal-head">
         <div>
-          <p class="signal-number">05 / HALO Video Gallery</p>
-          <h2 id="video-title">Watch the catalog.</h2>
-          <p>Teasers, studio sessions and performance cuts from HALO artists.</p>
+          <p class="signal-number">05 / Artist Video Gallery</p>
+          <h2 id="video-title" data-gallery-heading>Watch the artist.</h2>
+          <p data-gallery-intro>Only the artist's own visuals: Dreamweaver song videos and the videos they choose to add.</p>
         </div>
-        <p class="signal-tag" id="video-status" role="status">Loading the gallery…</p>
+        <div class="gallery-head-actions">
+          <label class="gallery-artist-switch" data-gallery-switch hidden>
+            <span class="visually-hidden">Artist shop</span>
+            <select class="signal-select" data-gallery-artist aria-label="Choose which of your artist shops to show"></select>
+          </label>
+          <button class="signal-btn-outline" type="button" data-gallery-edit hidden aria-expanded="false" aria-controls="gallery-editor">Edit gallery</button>
+          <p class="signal-tag" id="video-status" role="status">Loading the gallery…</p>
+        </div>
       </div>
-      <div class="video-stage" id="video-stage">
+
+      <div class="video-stage" id="video-stage" hidden>
         <div class="video-screen">
           <video id="video-player" controls playsinline preload="metadata" hidden></video>
           <iframe id="video-embed" hidden allow="autoplay; encrypted-media; picture-in-picture; fullscreen" allowfullscreen loading="lazy" referrerpolicy="strict-origin-when-cross-origin"></iframe>
-          <div class="video-placeholder" id="video-placeholder"><span>Visual in production</span></div>
+          <div class="video-placeholder" id="video-placeholder" hidden><span>Visual in production</span></div>
         </div>
         <div class="video-caption">
           <p class="signal-tag" id="video-active-tag">Featured visual</p>
           <h3 id="video-active-title"></h3>
           <p id="video-active-desc"></p>
+          <button class="signal-btn-outline video-cue" type="button" id="video-cue" hidden>Play this song in the library</button>
         </div>
       </div>
       <div class="video-grid" id="video-grid"></div>
+      <div class="gallery-empty" id="gallery-empty" hidden></div>
+
+      <div class="gallery-editor" id="gallery-editor" hidden>
+        <div class="gallery-editor-block">
+          <p class="signal-tag">Gallery rule</p>
+          <div class="gallery-modes" role="radiogroup" aria-label="What appears automatically">
+            <label><input type="radio" name="gallery-mode" value="dreamweaver_only"> <span><strong>Dreamweaver only</strong> Your Dreamweaver song videos appear automatically, plus anything you add.</span></label>
+            <label><input type="radio" name="gallery-mode" value="empty"> <span><strong>Start empty</strong> Nothing appears unless you add it.</span></label>
+          </div>
+        </div>
+
+        <div class="gallery-editor-block">
+          <p class="signal-tag">In your gallery</p>
+          <ol class="gallery-items" data-gallery-items></ol>
+        </div>
+
+        <div class="gallery-editor-block">
+          <p class="signal-tag">Add a video</p>
+          <form class="gallery-form" data-gallery-add-link>
+            <label>YouTube link<input class="signal-input" name="youtubeUrl" type="url" required placeholder="https://www.youtube.com/watch?v=…"></label>
+            <label>Title<input class="signal-input" name="title" required maxlength="160" placeholder="Studio cut, remix visual…"></label>
+            <label>Description<input class="signal-input" name="description" maxlength="1000"></label>
+            <label>Song<select class="signal-select" name="songId" data-song-select></select></label>
+            <label>Version<select class="signal-select" name="versionId" data-version-select><option value="">Any version</option></select></label>
+            <label>Where it lives<select class="signal-select" name="publishScope">
+              <option value="shop_only">Only my shop</option>
+              <option value="halo_feed">My shop + eligible for the HALO video feed</option>
+            </select></label>
+            <label class="gallery-check"><input type="checkbox" name="dreamweaver"> Made with Dreamweaver</label>
+            <button class="signal-btn" type="submit">Add to my gallery</button>
+          </form>
+          <div class="gallery-library" data-gallery-library></div>
+        </div>
+
+        <div class="gallery-editor-block">
+          <p class="signal-tag">Songs without a visual</p>
+          <div class="gallery-songs" data-gallery-songs></div>
+        </div>
+
+        <div class="gallery-editor-block">
+          <p class="signal-tag">Empty-state card</p>
+          <form class="gallery-form" data-gallery-empty-form>
+            <label>Heading<input class="signal-input" name="title" maxlength="120" placeholder="New visuals coming soon"></label>
+            <label>Note<input class="signal-input" name="note" maxlength="400" placeholder="The video for the next single lands on release day."></label>
+            <label>Teaser cover URL<input class="signal-input" name="coverUrl" maxlength="1000" placeholder="https://… or /assets/…"></label>
+            <label>Release date (countdown)<input class="signal-input" name="releaseAt" type="datetime-local"></label>
+            <button class="signal-btn-outline" type="submit">Save empty-state card</button>
+          </form>
+        </div>
+        <p class="gallery-editor-status" data-gallery-editor-status role="status"></p>
+      </div>
     </section>
 
     <section class="catalog-section" id="catalog" aria-labelledby="catalog-title">

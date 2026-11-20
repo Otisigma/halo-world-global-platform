@@ -73,7 +73,7 @@
     "test:video-discovery": "node scripts/video-discovery-contracts.mjs",
     "test:retained-master": "node --test scripts/retained-master-contracts.mjs",
     "test:retained-master:db": "node scripts/retained-master-db-contracts.mjs",
-    "test:living-player": "node scripts/living-player-contracts.mjs && node scripts/obsidian-visualizer-contracts.mjs && node scripts/retained-master-contracts.mjs"
+    "test:living-player": "node scripts/halo-theme-contracts.mjs && node scripts/living-player-contracts.mjs && node scripts/obsidian-visualizer-contracts.mjs && node scripts/retained-master-contracts.mjs"
   },
   "dependencies": {
     "@netlify/blobs": "^10.7.12",

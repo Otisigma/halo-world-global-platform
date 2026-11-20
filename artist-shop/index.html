@@ -41,6 +41,7 @@
   <link rel="stylesheet" href="/artist-shop/shop-experience.css">
   <script src="/artist-shop/shop-experience.js" defer></script>
   <link rel="stylesheet" href="/halo-living-player/living-player.css">
+  <script type="module" src="/artist-shop/shop-theme.js"></script>
   <script type="module" src="/artist-shop/library-living.js"></script>
 </head>
 <body>
@@ -72,6 +73,9 @@
           <option value="USD">$ USD</option>
         </select>
       </label>
+      <button class="theme-button" id="theme-button" type="button" aria-expanded="false" aria-controls="theme-panel">
+        <span class="theme-button-dot" aria-hidden="true"></span><span class="theme-button-label">Theme: <span data-theme-name>Obsidian Gold</span></span>
+      </button>
       <button class="bag-button" id="open-bag" type="button" aria-haspopup="dialog" aria-controls="bag-drawer">Bag <span class="bag-count" id="bag-count">0</span></button>
       <button class="text-button" id="auth-button" type="button">Join / sign in</button>
       <a class="home-link" href="/halo">Main HALO <span aria-hidden="true">↗</span></a>
@@ -326,6 +330,31 @@
       </div>
     </aside>
   </div>
+
+  <section class="theme-panel" id="theme-panel" role="dialog" aria-modal="false" aria-labelledby="theme-panel-title" hidden>
+    <div class="theme-panel-top">
+      <div>
+        <p class="signal-tag">Room theme</p>
+        <h2 id="theme-panel-title">Set the mood of the shop.</h2>
+      </div>
+      <button class="theme-close" type="button" data-theme-close aria-label="Close theme picker">×</button>
+    </div>
+    <p class="theme-panel-note">Hover or focus a theme to preview it. The player, visualizer, cards, video gallery and bag all follow.</p>
+    <div class="theme-preview-notice" data-theme-preview-notice hidden>
+      <span>Preview only. Your saved theme is <strong data-theme-saved-name></strong>.</span>
+      <button class="signal-btn-outline" type="button" data-theme-end-preview>End preview</button>
+    </div>
+    <div class="theme-list" data-theme-list></div>
+    <div class="theme-custom">
+      <p class="theme-group-label">Custom Brand Palette — Pro, preview only</p>
+      <div class="theme-custom-row">
+        <label>Accent <input type="color" id="theme-custom-accent" value="#e5b84b"></label>
+        <label>Background <input type="color" id="theme-custom-bg" value="#0b0b0d"></label>
+        <button class="signal-btn-outline" type="button" data-theme-custom aria-pressed="false">Preview palette</button>
+      </div>
+    </div>
+    <p class="theme-status" data-theme-status role="status"></p>
+  </section>
 
   <div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
 </body>

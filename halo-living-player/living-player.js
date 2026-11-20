@@ -8,6 +8,7 @@
 import { createLivingVisualizer } from "../obsidian/living-visualizer.js";
 import { parseTimestampedLyrics, findActiveLyricIndex } from "../lib/dreamweaver-lyrics.js";
 import { verifySnapshotInBrowser } from "../lib/retained-record.js";
+import { readVisualizerColors } from "../lib/halo-themes.js";
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
 
@@ -17,7 +18,7 @@ precision highp float;
 #else
 precision mediump float;
 #endif
-uniform vec2 u_res;uniform float u_time,u_bass,u_treble;
+uniform vec2 u_res;uniform float u_time,u_bass,u_treble,u_light;uniform vec3 u_bg,u_primary,u_secondary;
 float hash(vec2 p){return fract(sin(dot(p,vec2(127.1,311.7)))*43758.5453);}
 float noise(vec2 p){vec2 i=floor(p),f=fract(p);vec2 u=f*f*(3.-2.*f);
   return mix(mix(hash(i),hash(i+vec2(1.,0.)),u.x),mix(hash(i+vec2(0.,1.)),hash(i+vec2(1.,1.)),u.x),u.y);}
@@ -31,13 +32,14 @@ void main(){
   float ring2=(1.-smoothstep(0.,.006,abs(r-.47-.02*sin(t*9.+flow*6.))))*.35;
   float aura=exp(-r*r*(5.-2.6*u_bass));
   float glints=pow(noise(uv*38.+t*20.),18.)*u_treble*2.2;
-  vec3 obsidian=vec3(.039,.039,.043),bronze=vec3(.36,.26,.1),gold=vec3(.83,.69,.22),pale=vec3(.95,.9,.67);
-  vec3 col=obsidian;
-  col=mix(col,bronze,smoothstep(.35,.85,flow)*aura*.9);
-  col+=gold*aura*(.16+.55*u_bass);
-  col+=mix(gold,pale,u_treble)*(ring*(.3+.7*u_bass)+ring2);
-  col+=pale*glints;
-  col*=1.-smoothstep(.55,1.2,r);
+  // Theme colours come from the room's --halo-visualizer-* tokens; mixes (not adds) keep light themes readable.
+  vec3 pale=mix(mix(u_primary,vec3(1.),.55),mix(u_primary,u_secondary,.35),u_light);
+  vec3 col=u_bg;
+  col=mix(col,u_secondary,clamp(smoothstep(.35,.85,flow)*aura*(.9-.4*u_light),0.,1.));
+  col=mix(col,u_primary,clamp(aura*(.16+.55*u_bass)*(1.-.35*u_light),0.,1.));
+  col=mix(col,mix(u_primary,pale,u_treble),clamp(ring*(.3+.7*u_bass)+ring2,0.,1.));
+  col=mix(col,pale,clamp(glints,0.,1.));
+  col=mix(col,u_bg,smoothstep(.55,1.2,r));
   gl_FragColor=vec4(col,1.);
 }`;
 
@@ -65,8 +67,16 @@ function createShaderStage(canvas, win) {
     gl.enableVertexAttribArray(position);
     gl.vertexAttribPointer(position, 2, gl.FLOAT, false, 0, 0);
     const u = name => gl.getUniformLocation(program, name);
-    const uniforms = { res: u("u_res"), time: u("u_time"), bass: u("u_bass"), treble: u("u_treble") };
+    const uniforms = { res: u("u_res"), time: u("u_time"), bass: u("u_bass"), treble: u("u_treble"),
+      light: u("u_light"), bg: u("u_bg"), primary: u("u_primary"), secondary: u("u_secondary") };
+    const toUnit = rgb => rgb.map(v => v / 255);
     return {
+      setColors({ bg, primary, secondary, light }) {
+        gl.uniform3fv(uniforms.bg, toUnit(bg));
+        gl.uniform3fv(uniforms.primary, toUnit(primary));
+        gl.uniform3fv(uniforms.secondary, toUnit(secondary));
+        gl.uniform1f(uniforms.light, light ? 1 : 0);
+      },
       draw(time, bass, treble) {
         const ratio = Math.min(win.devicePixelRatio || 1, 1.5);
         const width = Math.max(1, Math.round(canvas.clientWidth * ratio));
@@ -157,8 +167,8 @@ export function mountLivingPlayer({ mount, audio, label = "HALO living player", 
   svg.setAttribute("aria-hidden", "true");
   svg.setAttribute("focusable", "false");
   svg.innerHTML = `<defs><radialGradient id="haloLivingGlow" cx="50%" cy="50%" r="50%">
-    <stop offset="0%" stop-color="#d4af37" stop-opacity=".6"/><stop offset="60%" stop-color="#8a6f1a" stop-opacity=".2"/>
-    <stop offset="100%" stop-color="#0a0a0a" stop-opacity="0"/></radialGradient></defs>
+    <stop class="halo-living-stop-a" offset="0%" stop-color="#d4af37" stop-opacity=".6"/><stop class="halo-living-stop-b" offset="60%" stop-color="#8a6f1a" stop-opacity=".2"/>
+    <stop class="halo-living-stop-c" offset="100%" stop-color="#0a0a0a" stop-opacity="0"/></radialGradient></defs>
     <circle class="halo-living-aura" cx="250" cy="150" r="130" fill="url(#haloLivingGlow)"/>
     <circle class="halo-living-ring" cx="250" cy="150" r="140" fill="none" stroke="#d4af37" stroke-width=".6" stroke-dasharray="4 8"/>
     <circle class="halo-living-ring is-inner" cx="250" cy="150" r="96" fill="none" stroke="#f3e5ab" stroke-width=".8"/>`;
@@ -206,6 +216,9 @@ export function mountLivingPlayer({ mount, audio, label = "HALO living player", 
   let shader = createShaderStage(canvas, win);
   const useSvg = () => { shader = null; root.classList.add("is-svg"); };
   if (!shader) useSvg();
+  // Follow the room theme: re-read the visualizer tokens whenever a theme is applied or previewed.
+  const applyColors = () => { shader?.setColors(readVisualizerColors(root, win)); wake(); };
+  win.addEventListener?.("halo:theme-changed", applyColors);
   canvas.addEventListener("webglcontextlost", event => { event.preventDefault(); useSvg(); });
 
   let frame = null, visible = true, startTime = win.performance.now();
@@ -232,7 +245,7 @@ export function mountLivingPlayer({ mount, audio, label = "HALO living player", 
   if ("ResizeObserver" in win) new win.ResizeObserver(() => wake()).observe(stage);
   for (const type of ["play", "playing", "pause", "seeked"]) audio.addEventListener(type, wake);
   doc.addEventListener("visibilitychange", wake);
-  wake();
+  applyColors();
 
   // Kinetic typography.
   let lyrics = { timed: [], hasTimed: false };

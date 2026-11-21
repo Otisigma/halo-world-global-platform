@@ -43,6 +43,7 @@
   <script src="/artist-shop/shop-experience.js" defer></script>
   <script src="/artist-shop/shop-video-gallery.js" defer></script>
   <link rel="stylesheet" href="/artist-shop/artist-persona.css">
+  <link rel="stylesheet" href="/artist-shop/proof-provenance-banner.css">
   <script src="/artist-shop/artist-persona.js" defer></script>
   <link rel="stylesheet" href="/halo-living-player/living-player.css">
   <script type="module" src="/artist-shop/shop-theme.js"></script>
@@ -163,6 +164,92 @@
         <button class="signal-btn-outline" type="button" data-header-reset>Reset to theme backdrop</button>
       </div>
       <p class="theme-status" data-header-panel-status role="status"></p>
+    </section>
+
+    <section class="pp-banner" id="proof-provenance" aria-labelledby="pp-banner-title">
+      <div class="pp-banner__grid">
+        <div class="pp-banner__visual">
+          <img class="pp-banner__art" src="/assets/proof-provenance-banner.webp" alt="" width="1024" height="434" loading="lazy" decoding="async">
+          <svg class="pp-banner__overlay" viewBox="0 0 600 480" preserveAspectRatio="xMidYMid slice" aria-hidden="true" focusable="false">
+            <defs>
+              <linearGradient id="pp-gold" x1="0" y1="0" x2="1" y2="1">
+                <stop offset="0" stop-color="#b0773b"/>
+                <stop offset="0.5" stop-color="#f3e5ab"/>
+                <stop offset="1" stop-color="#d4af37"/>
+              </linearGradient>
+              <linearGradient id="pp-scan-grad" x1="0" y1="0" x2="1" y2="0">
+                <stop offset="0" stop-color="#f3e5ab" stop-opacity="0"/>
+                <stop offset="0.5" stop-color="#f3e5ab" stop-opacity="0.35"/>
+                <stop offset="1" stop-color="#f3e5ab" stop-opacity="0"/>
+              </linearGradient>
+              <radialGradient id="pp-glow">
+                <stop offset="0" stop-color="#fff6d6"/>
+                <stop offset="1" stop-color="#d4af37" stop-opacity="0"/>
+              </radialGradient>
+            </defs>
+            <!-- Crest rings -->
+            <g fill="none" stroke="url(#pp-gold)">
+              <circle class="pp-ring pp-ring--slow" cx="210" cy="240" r="178" stroke-width="1.2" stroke-dasharray="2 9" opacity="0.8"/>
+              <circle class="pp-ring pp-ring--rev" cx="210" cy="240" r="196" stroke-width="0.8" stroke-dasharray="40 14 4 14" opacity="0.55"/>
+              <circle class="pp-pulse" cx="210" cy="240" r="150" stroke-width="1.5"/>
+              <circle class="pp-pulse pp-pulse--late" cx="210" cy="240" r="150" stroke-width="1"/>
+            </g>
+            <!-- Signal waveform -->
+            <path class="pp-wave" d="M0 240 C 60 200, 90 280, 150 240 S 240 190, 300 240 S 390 290, 450 240 S 540 200, 600 240" fill="none" stroke="#f3e5ab" stroke-width="1.4" opacity="0.7"/>
+            <!-- Provenance chain: packets travel from master to verification locks -->
+            <g fill="none" stroke="#d4af37" stroke-width="0.8" opacity="0.45">
+              <path d="M300 240 C 380 150, 450 130, 560 120"/>
+              <path d="M300 240 C 400 240, 470 240, 570 240"/>
+              <path d="M300 240 C 380 330, 450 350, 560 360"/>
+            </g>
+            <circle class="pp-packet" r="4" fill="url(#pp-glow)" style="offset-path: path('M300 240 C 380 150, 450 130, 560 120')"/>
+            <circle class="pp-packet pp-packet--2" r="4" fill="url(#pp-glow)" style="offset-path: path('M300 240 C 400 240, 470 240, 570 240')"/>
+            <circle class="pp-packet pp-packet--3" r="4" fill="url(#pp-glow)" style="offset-path: path('M300 240 C 380 330, 450 350, 560 360')"/>
+            <g fill="none" stroke="url(#pp-gold)" stroke-width="1.4">
+              <g class="pp-lock" transform="translate(560 120)"><rect x="-9" y="-4" width="18" height="14" rx="2"/><path d="M-5 -4 v-4 a5 5 0 0 1 10 0 v4"/></g>
+              <g class="pp-lock pp-lock--2" transform="translate(570 240)"><rect x="-9" y="-4" width="18" height="14" rx="2"/><path d="M-5 -4 v-4 a5 5 0 0 1 10 0 v4"/></g>
+              <g class="pp-lock pp-lock--3" transform="translate(560 360)"><rect x="-9" y="-4" width="18" height="14" rx="2"/><path d="M-5 -4 v-4 a5 5 0 0 1 10 0 v4"/></g>
+            </g>
+            <!-- Verification scan line -->
+            <rect class="pp-scan" x="0" y="0" width="120" height="480" fill="url(#pp-scan-grad)"/>
+          </svg>
+          <!-- Badge / crest slot: swap the SVG for an artist crest image if needed -->
+          <div class="pp-banner__crest" data-pp-crest>
+            <svg viewBox="0 0 40 40" aria-hidden="true" focusable="false">
+              <circle class="pp-crest-ring" cx="20" cy="20" r="18" fill="none" stroke="#d4af37" stroke-width="1.2" stroke-dasharray="3 3"/>
+              <circle cx="20" cy="20" r="13" fill="#0b0b0c" stroke="#b0773b" stroke-width="1"/>
+              <path d="M14 21.5 l4 4 l8 -9" fill="none" stroke="#f3e5ab" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+            <span>HALO Master Seal</span>
+          </div>
+        </div>
+
+        <div class="pp-banner__copy">
+          <p class="pp-banner__eyebrow">HALO Music World · Mission</p>
+          <h2 class="pp-banner__title" id="pp-banner-title">Proof &amp; Provenance</h2>
+          <p class="pp-banner__tagline">Every signal. Every master. Verified.</p>
+          <p class="pp-banner__blurb">Follow the complete journey of every track from studio master to real-world play. Our Proof and Provenance system pairs autonomous signal tracking with cryptographic master verification so fans and creators can trace authenticity, track release milestones, and experience music backed by transparent origin records.</p>
+          <ul class="pp-banner__highlights">
+            <li>
+              <svg viewBox="0 0 20 20" aria-hidden="true" focusable="false"><path d="M10 1.5 3 4.5v5c0 4.2 3 7.6 7 9 4-1.4 7-4.8 7-9v-5z" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="m6.8 10 2.2 2.2 4.2-4.4" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
+              <span><strong>Master Provenance:</strong> cryptographic verification tying releases back to their original master source.</span>
+            </li>
+            <li>
+              <svg viewBox="0 0 20 20" aria-hidden="true" focusable="false"><path d="M1 10h3l2-5 3 10 3-8 2 3h5" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+              <span><strong>Signal Tracking:</strong> continuous observation across broadcasts, streams, and listener activity.</span>
+            </li>
+            <li>
+              <svg viewBox="0 0 20 20" aria-hidden="true" focusable="false"><circle cx="4" cy="10" r="2.2" fill="none" stroke="currentColor" stroke-width="1.5"/><circle cx="16" cy="4.5" r="2.2" fill="none" stroke="currentColor" stroke-width="1.5"/><circle cx="16" cy="15.5" r="2.2" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M6 9l8-3.6M6 11l8 3.6" stroke="currentColor" stroke-width="1.5"/></svg>
+              <span><strong>Complete Music Journey:</strong> connect directly with the artist's catalog, verified releases, and behind-the-scenes lineage.</span>
+            </li>
+          </ul>
+          <div class="pp-banner__actions">
+            <a class="pp-banner__cta" href="/provenance/">Trace the provenance <span aria-hidden="true">→</span></a>
+            <a class="pp-banner__link" href="/signal-network/">Open the signal view</a>
+          </div>
+          <p class="pp-banner__note">Signal tracking currently draws on consented first-party listening on HALO. Broadcast and external stream sources are added as each one is verified.</p>
+        </div>
+      </div>
     </section>
 
     <aside class="prototype-notice" aria-label="Artist Shop preview status">

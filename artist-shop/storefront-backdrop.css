@@ -1,0 +1,64 @@
+/* HALO Artist Shop — looping video backdrop + glass menu bar.
+   The video is fixed behind the whole storefront (z-index -1, no pointer events). The hero and the
+   dark obsidian bands are made slightly translucent so the loop shows through them; light "paper"
+   sections stay solid so product text keeps full contrast. */
+
+body { background: var(--obsidian, #0b0b0c); }
+
+.storefront-backdrop {
+  position: fixed; inset: 0; z-index: -1;
+  overflow: hidden; pointer-events: none;
+  background: var(--obsidian, #0b0b0c);
+}
+.storefront-backdrop video {
+  width: 100%; height: 100%;
+  object-fit: cover;
+  opacity: .55;
+  transition: opacity .6s ease;
+}
+.storefront-backdrop[data-state="paused"] video { opacity: .35; }
+/* Theme-tinted wash keeps every room theme (Obsidian Gold, Sub-Zero Ultraviolet…) in charge of the mood. */
+.storefront-backdrop::after {
+  content: ""; position: absolute; inset: 0;
+  background:
+    radial-gradient(120% 80% at 50% 0%, transparent 0%, color-mix(in srgb, var(--obsidian, #0b0b0c) 70%, transparent) 100%),
+    color-mix(in srgb, var(--obsidian, #0b0b0c) 35%, transparent);
+}
+
+/* Let the loop show through the hero and the dark bands. */
+.signal-hero { background: color-mix(in srgb, var(--obsidian, #0b0b0c) 45%, transparent); }
+.signal-band { background: color-mix(in srgb, var(--obsidian, #0b0b0c) 84%, transparent); }
+.artists-section { background: color-mix(in srgb, var(--ink, #11100d) 86%, transparent); }
+
+/* Glass menu bar. Same sticky position and z-index as before, so the nav links, theme picker,
+   bag, currency switch and sign-in keep working exactly as they did. */
+.site-header {
+  color: #f5f2ea;
+  background: rgba(13, 13, 20, 0.75);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid rgba(168, 85, 247, 0.25);
+  border-width: 0 0 1px;
+  box-shadow: 0 4px 30px rgba(0, 0, 0, 0.1);
+}
+.site-header .wordmark,
+.site-header .primary-nav a,
+.site-header .home-link,
+.site-header .text-button { color: #f5f2ea; }
+.site-header .primary-nav a::after { background: var(--gold, #d4af37); }
+.site-header .text-button,
+.site-header .theme-button,
+.site-header .bag-button,
+.site-header .currency-switch select { border-color: rgba(245, 242, 234, .55); color: #f5f2ea; }
+.site-header .text-button:hover { color: var(--obsidian, #0b0b0c); background: #f5f2ea; }
+.site-header .currency-switch select option { color: #11100d; background: #f5f2ea; }
+
+/* Browsers without backdrop-filter get a more solid bar so links stay readable. */
+@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+  .site-header { background: rgba(13, 13, 20, 0.94); }
+}
+
+/* Reduced motion: the script never starts the loop; show a calm still backdrop instead. */
+@media (prefers-reduced-motion: reduce) {
+  .storefront-backdrop video { display: none; }
+}

@@ -58,6 +58,13 @@ dashboard integration needs authorized, privacy-thresholded aggregate queries
 and clear separation from verified chart/milestone data; never infer identity,
 listening duration, track ownership, or full-stream completion from these reports.
 
+The Signal Network Console can display the existing owner-only 7-day distinct
+consented-listener aggregate from `/api/halo-control-center?view=outcomes`.
+This is not a play count or per-asset report. Its separate master observation
+lookup uses the existing owner-scoped provenance endpoint; listed observations
+are not authenticated on read and SHA-256 matches exact bytes only. The console
+does not deploy crawling agents or process crypto payments.
+
 Run `npm run test:listening-telemetry` for API/client contracts and automatic
 handler-to-PostgreSQL concurrency tests when local PostgreSQL 16 is installed. SQL integration
 contracts can be run with `psql -X -v ON_ERROR_STOP=1 -f scripts/listening-telemetry-db-contracts.sql`

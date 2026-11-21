@@ -105,18 +105,18 @@
                     </h1>
                     <span class="text-[9px] bg-purple-950/80 border border-purple-800/60 text-purple-300 px-2 py-0.5 rounded font-mono font-bold tracking-widest">v4.9.8-MESH</span>
                 </div>
-                <p class="text-[10px] text-gray-400 uppercase tracking-widest">Decentralized Telemetry, Node Mesh & B2B Signal Router</p>
+                <p class="text-[10px] text-gray-400 uppercase tracking-widest">Simulated node mesh &amp; first-party evidence</p>
             </div>
         </div>
 
         <div class="flex items-center gap-3 text-xs font-mono">
             <div class="hidden sm:flex items-center gap-2 bg-purple-950/30 px-3 py-1.5 rounded-lg border border-purple-900/40">
                 <i data-lucide="radio" class="h-3.5 w-3.5 text-amber-400 animate-pulse"></i>
-                <span class="text-gray-400">MESH LATENCY: <span id="hdr-latency" class="text-emerald-400 font-bold">14ms</span></span>
+                <span class="text-gray-400">SIMULATED LATENCY: <span id="hdr-latency" class="text-emerald-400 font-bold">14ms</span></span>
             </div>
             <div class="hidden md:flex items-center gap-2 bg-purple-950/30 px-3 py-1.5 rounded-lg border border-purple-900/40">
                 <i data-lucide="activity" class="h-3.5 w-3.5 text-purple-400"></i>
-                <span class="text-gray-400">NODES ACTIVE: <span id="hdr-nodes-count" class="text-amber-400 font-bold">6 ONLINE</span></span>
+                <span class="text-gray-400">DEMO NODES: <span id="hdr-nodes-count" class="text-amber-400 font-bold">6 SIMULATED</span></span>
             </div>
             <a href="/halo" class="bg-purple-950/60 hover:bg-purple-900 border border-purple-700/50 text-purple-200 px-3 py-1.5 rounded-lg text-xs font-bold transition flex items-center gap-1.5 uppercase tracking-wider">
                 <i data-lucide="arrow-left" class="h-3.5 w-3.5"></i>
@@ -135,11 +135,11 @@
                 <div class="flex justify-between items-center mb-3">
                     <div class="flex items-center gap-2">
                         <i data-lucide="globe" class="h-4 w-4 text-amber-400"></i>
-                        <h2 class="text-xs font-bold text-gray-200 uppercase tracking-widest font-mono">GLOBAL NODE TELEMETRY MAP</h2>
+                        <h2 class="text-xs font-bold text-gray-200 uppercase tracking-widest font-mono">SIMULATED NODE MAP</h2>
                     </div>
                     <div class="flex items-center gap-2 text-[10px]">
-                        <span class="inline-flex items-center gap-1 text-emerald-400"><span class="h-2 w-2 rounded-full bg-emerald-400"></span> Live Relay</span>
-                        <span class="inline-flex items-center gap-1 text-purple-400"><span class="h-2 w-2 rounded-full bg-purple-400"></span> Edge Hotspot</span>
+                        <span class="inline-flex items-center gap-1 text-emerald-400"><span class="h-2 w-2 rounded-full bg-emerald-400"></span> Demo Relay</span>
+                        <span class="inline-flex items-center gap-1 text-purple-400"><span class="h-2 w-2 rounded-full bg-purple-400"></span> Demo Hotspot</span>
                     </div>
                 </div>
 
@@ -156,8 +156,7 @@
                 </div>
 
                 <div class="mt-3 flex flex-wrap justify-between items-center gap-2 text-[10px] text-gray-400 font-mono pt-2 border-t border-purple-950/40">
-                    <span>Target IP Sync: <span class="text-white">halo.world.local (192.168.4.1)</span></span>
-                    <span>Protocol: <span class="text-amber-400 font-bold">WebAudio DSP ArrayBuffer / SSE</span></span>
+                    <span>Illustrative nodes and traffic only; no network connections are made.</span>
                 </div>
             </div>
 
@@ -165,10 +164,10 @@
                 <div class="flex justify-between items-center border-b border-purple-950/60 pb-2">
                     <h3 class="text-xs font-bold text-purple-400 uppercase tracking-widest flex items-center gap-2">
                         <i data-lucide="server" class="h-4 w-4"></i>
-                        REGISTERED NETWORK NODES
+                        SIMULATED NETWORK NODES
                     </h3>
                     <button id="btn-ping-all" class="bg-purple-950/80 hover:bg-purple-900 border border-purple-700/60 text-purple-300 text-[10px] px-2.5 py-1 rounded font-bold uppercase tracking-wider transition">
-                        Ping All Nodes
+                        Simulate Ping
                     </button>
                 </div>
 
@@ -180,6 +179,29 @@
 
         <!-- RIGHT COLUMN: Telemetry Controls & Signal Logs (5 Cols) -->
         <section class="lg:col-span-5 flex flex-col space-y-6">
+
+            <div class="bg-[#0b0b12] border border-purple-950/80 rounded-2xl p-5 space-y-3">
+                <h3 class="text-xs font-bold text-emerald-400 uppercase tracking-widest">First-party evidence</h3>
+                <p class="text-xs text-gray-400 font-sans-alt">Read the existing owner-only, consented listener aggregate and your own master observations. This does not crawl external platforms or count verified plays.</p>
+                <p class="text-xs text-gray-400 font-sans-alt">Sign in through the <a class="text-purple-300 underline" href="/song-catalog/">song catalog</a> first. Listener totals require owner access; master observations require ownership.</p>
+                <button id="evidence-listeners" class="border border-purple-700 rounded px-3 py-2 text-xs">Refresh listener aggregate</button>
+                <p id="evidence-listener-status" role="status" class="text-xs text-gray-300">Not loaded.</p>
+                <form id="evidence-form" class="space-y-2">
+                    <label class="block text-xs" for="evidence-song">Song ID</label>
+                    <input id="evidence-song" required class="w-full bg-black border border-purple-800 rounded px-2 py-1 text-xs" autocomplete="off">
+                    <label class="block text-xs" for="evidence-version">Master version ID</label>
+                    <input id="evidence-version" required class="w-full bg-black border border-purple-800 rounded px-2 py-1 text-xs" autocomplete="off">
+                    <button class="border border-purple-700 rounded px-3 py-2 text-xs" type="submit">Load master observations</button>
+                </form>
+                <p id="evidence-master-status" role="status" class="text-xs text-gray-300">Not loaded.</p>
+                <ul id="evidence-master-list" class="text-xs text-gray-300 space-y-2 break-all"></ul>
+                <p class="text-xs text-gray-400 font-sans-alt">Observation history is not authenticated on listing. SHA-256 identifies exact bytes only; it cannot detect re-encoded audio or establish ownership. <a href="/provenance/verify/" class="text-purple-300 underline">Inspect signed snapshots and compare files</a>.</p>
+            </div>
+
+            <div class="bg-[#0b0b12] border border-purple-950/80 rounded-2xl p-5 space-y-2">
+                <h3 class="text-xs font-bold text-amber-400 uppercase tracking-widest">Direct artist payments</h3>
+                <p class="text-xs text-gray-300 font-sans-alt">Unavailable: no deployed and reviewed payment contract, network configuration, or verified artist wallet registry is connected. No wallet connection or transfer is initiated here. Network and wallet fees may still apply to direct payments.</p>
+            </div>
 
             <div class="bg-[#0b0b12] border border-purple-950/80 rounded-2xl p-5 space-y-4 shadow-xl">
                 <div class="border-b border-purple-950/60 pb-3">
@@ -221,9 +243,9 @@
                 <div class="flex justify-between items-center border-b border-purple-950/60 pb-2">
                     <h3 class="text-xs font-bold text-emerald-400 uppercase tracking-widest flex items-center gap-2 font-mono">
                         <i data-lucide="cpu" class="h-4 w-4"></i>
-                        5-NODE AI WORKFORCE SIGNAL CHANNEL
+                        SIMULATED AI WORKFORCE SIGNAL CHANNEL
                     </h3>
-                    <span class="text-[8px] bg-emerald-950 text-emerald-400 border border-emerald-800 px-1.5 py-0.5 rounded font-mono font-bold">CLIENT-SIDE</span>
+                    <span class="text-[8px] bg-emerald-950 text-emerald-400 border border-emerald-800 px-1.5 py-0.5 rounded font-mono font-bold">SIMULATION</span>
                 </div>
 
                 <div class="space-y-2 text-[10px] font-mono">
@@ -254,7 +276,7 @@
                 <div class="flex justify-between items-center border-b border-purple-950/60 pb-2 mb-2 font-mono">
                     <span class="text-xs font-bold text-gray-300 uppercase tracking-wider flex items-center gap-1.5">
                         <i data-lucide="terminal" class="h-3.5 w-3.5 text-rose-400"></i>
-                        NETWORK SIGNAL TELEMETRY LOG
+                        SIMULATED SIGNAL LOG
                     </span>
                     <span class="h-2 w-2 rounded-full bg-emerald-400 animate-pulse"></span>
                 </div>
@@ -289,8 +311,8 @@
             
             initCanvas();
             renderNodesList();
-            addLog("SYSTEM BOOT // HALO Signal Network Console initialized.");
-            addLog("Connected to 6 active global nodes. Average latency: 14ms.");
+            addLog("SIMULATION // HALO Signal Network Console initialized.");
+            addLog("Simulated 6 nodes. No live node connection was made.");
 
             // Add Event Listeners for Signal Injectors
             document.getElementById('btn-sig-decryption').addEventListener('click', () => {
@@ -467,6 +489,7 @@
             }
         }
     </script>
+  <script src="/signal-network/console-evidence.js" defer></script>
   <script src="/halo-companion.js" defer data-halo-companion="true"></script>
 </body>
 </html>

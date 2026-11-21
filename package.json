@@ -26,7 +26,7 @@
     "test:teaser-renderer": "node scripts/teaser-renderer-contracts.mjs",
     "test:dreamweaver-oracle": "node scripts/dreamweaver-oracle-contracts.mjs",
     "test:music-safety": "node scripts/music-safety-contracts.mjs",
-    "posttest": "npm run -s test:listening-telemetry && npm run -s test:discoverer && npm run -s test:onboarding && npm run -s test:release-teaser && npm run -s test:music-safety && npm run -s test:dreamweaver-assets && npm run -s test:halo-shield && npm run -s test:pricing && npm run -s test:drive-catalog && npm run -s test:dreamweaver-oracle",
+    "posttest": "npm run -s test:listening-telemetry && npm run -s test:discoverer && npm run -s test:onboarding && npm run -s test:release-teaser && npm run -s test:music-safety && npm run -s test:dreamweaver-assets && npm run -s test:halo-shield && npm run -s test:pricing && npm run -s test:drive-catalog && npm run -s test:dreamweaver-oracle && npm run -s test:stream-reports",
     "test:drive-catalog": "node scripts/catalog-curator-contracts.mjs && node scripts/mix-intent-contracts.mjs && node scripts/drive-catalog-contracts.mjs && node scripts/catalog-player-contracts.mjs && node scripts/song-catalog-playback-contracts.mjs",
     "test:pricing": "node scripts/pricing-contracts.mjs",
     "test:runner-briefing": "node scripts/runner-briefing-contracts.mjs",
@@ -75,7 +75,8 @@
     "test:video-discovery": "node scripts/video-discovery-contracts.mjs",
     "test:retained-master": "node --test scripts/retained-master-contracts.mjs",
     "test:retained-master:db": "node scripts/retained-master-db-contracts.mjs",
-    "test:living-player": "node scripts/halo-theme-contracts.mjs && node scripts/living-player-contracts.mjs && node scripts/obsidian-visualizer-contracts.mjs && node scripts/retained-master-contracts.mjs"
+    "test:living-player": "node scripts/halo-theme-contracts.mjs && node scripts/living-player-contracts.mjs && node scripts/obsidian-visualizer-contracts.mjs && node scripts/retained-master-contracts.mjs",
+    "test:stream-reports": "node scripts/stream-report-contracts.mjs"
   },
   "dependencies": {
     "@netlify/blobs": "^10.7.12",

@@ -84,9 +84,6 @@
           <option value="USD">$ USD</option>
         </select>
       </label>
-      <button class="theme-button" id="theme-button" type="button" aria-expanded="false" aria-controls="theme-panel">
-        <span class="theme-button-dot" aria-hidden="true"></span><span class="theme-button-label">Theme: <span data-theme-name>Obsidian Gold</span></span>
-      </button>
       <button class="bag-button" id="open-bag" type="button" aria-haspopup="dialog" aria-controls="bag-drawer">Bag <span class="bag-count" id="bag-count">0</span></button>
       <button class="text-button" id="auth-button" type="button">Join / sign in</button>
       <a class="home-link" href="/halo">Main HALO <span aria-hidden="true">↗</span></a>
@@ -485,6 +482,23 @@
       </div>
     </section>
   </main>
+
+  <footer class="site-footer">
+    <div class="site-footer-brand">
+      <strong>HALO</strong> <span>Artist Shop</span>
+    </div>
+    <div class="site-footer-theme">
+      <span class="site-footer-label" id="footer-theme-label">Room theme</span>
+      <button class="theme-button" id="theme-button" type="button" aria-expanded="false" aria-controls="theme-panel" aria-describedby="footer-theme-label">
+        <span class="theme-button-dot" aria-hidden="true"></span><span class="theme-button-label">Theme: <span data-theme-name>Obsidian Gold</span></span>
+      </button>
+    </div>
+    <nav class="site-footer-links" aria-label="Footer">
+      <a href="/halo">Main HALO</a>
+      <a href="/creators/">Creator World</a>
+      <a href="/creators/#money-model">How money works</a>
+    </nav>
+  </footer>
 
   <div class="modal" id="product-modal" hidden>
     <div class="modal-backdrop" data-close-product></div>

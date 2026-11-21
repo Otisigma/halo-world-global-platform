@@ -62,3 +62,38 @@ body { background: var(--obsidian, #0b0b0c); }
 @media (prefers-reduced-motion: reduce) {
   .storefront-backdrop video { display: none; }
 }
+
+/* Softer glass: a touch more see-through so the backdrop reads behind the menu bar. */
+.site-header { background: rgba(13, 13, 20, 0.62); backdrop-filter: blur(14px) saturate(140%); -webkit-backdrop-filter: blur(14px) saturate(140%); }
+
+/* Footer — home of the room theme picker (moved out of the header to keep the top bar clean). */
+.site-footer {
+  position: relative; z-index: 2;
+  display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 1rem 2rem;
+  padding: 1.6rem clamp(1rem, 4vw, 3rem);
+  color: #f5f2ea;
+  background: rgba(13, 13, 20, 0.72);
+  backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px);
+  border-top: 1px solid rgba(168, 85, 247, 0.25);
+  font-family: var(--mono, monospace); font-size: .75rem;
+}
+.site-footer-brand strong { letter-spacing: .12em; }
+.site-footer-brand span { color: rgba(245, 242, 234, .65); margin-left: .35rem; }
+.site-footer-theme { display: inline-flex; align-items: center; gap: .7rem; }
+.site-footer-label { color: rgba(245, 242, 234, .65); text-transform: uppercase; letter-spacing: .1em; font-size: .65rem; }
+.site-footer .theme-button { border-color: rgba(245, 242, 234, .55); color: #f5f2ea; }
+.site-footer .theme-button:hover { border-color: var(--gold, #d4af37); }
+.site-footer-links { display: flex; flex-wrap: wrap; gap: 1.2rem; }
+.site-footer-links a { color: #f5f2ea; text-decoration: none; }
+.site-footer-links a:hover, .site-footer-links a:focus-visible { color: var(--gold-light, #f0d27a); text-decoration: underline; }
+/* Theme picker opens just above the footer instead of under the header. */
+.theme-panel { top: auto; bottom: 5.5rem; max-height: calc(100vh - 7rem); }
+@media (max-width: 640px) {
+  .theme-panel { top: auto; bottom: 1rem; }
+  /* Footer has room, so keep the theme name visible on phones. */
+  .site-footer .theme-button-label { position: static; width: auto; height: auto; overflow: visible; clip: auto; }
+  .site-footer .theme-button { padding: .45rem .7rem; }
+}
+@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+  .site-header, .site-footer { background: rgba(13, 13, 20, 0.94); }
+}

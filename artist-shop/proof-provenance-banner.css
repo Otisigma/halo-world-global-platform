@@ -1,0 +1,305 @@
+/* Proof & Provenance mission banner — obsidian with brushed gold + bronze. */
+.pp-banner {
+  --pp-obsidian: #07070a;
+  --pp-obsidian-2: #121117;
+  --pp-gold: #d4af37;
+  --pp-gold-light: #f3e5ab;
+  --pp-bronze: #b0773b;
+  --pp-text: #f3eee2;
+  --pp-muted: rgba(243, 238, 226, 0.72);
+  --pp-line: rgba(212, 175, 55, 0.32);
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
+  margin: clamp(16px, 3vw, 36px) clamp(12px, 3vw, 40px);
+  border: 1px solid var(--pp-line);
+  border-radius: 18px;
+  background:
+    radial-gradient(120% 140% at 0% 50%, rgba(212, 175, 55, 0.10), transparent 55%),
+    radial-gradient(90% 120% at 100% 0%, rgba(176, 119, 59, 0.14), transparent 60%),
+    linear-gradient(160deg, var(--pp-obsidian-2), var(--pp-obsidian));
+  color: var(--pp-text);
+  box-shadow: 0 30px 80px rgba(0, 0, 0, 0.45), inset 0 1px 0 rgba(243, 229, 171, 0.12);
+}
+
+/* Brushed-metal frame line */
+.pp-banner::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  border-radius: inherit;
+  padding: 1px;
+  background: linear-gradient(115deg, var(--pp-bronze), var(--pp-gold-light) 30%, var(--pp-gold) 50%, var(--pp-bronze) 75%, var(--pp-gold-light));
+  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+  mask-composite: exclude;
+  opacity: 0.6;
+  pointer-events: none;
+}
+
+.pp-banner__grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr);
+  align-items: stretch;
+  min-height: clamp(360px, 38vw, 480px);
+}
+
+/* ---------- Visual / crest slot ---------- */
+.pp-banner__visual {
+  position: relative;
+  overflow: hidden;
+  background: #000;
+}
+
+.pp-banner__art {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  /* Keeps the crest and signal waveform in frame; the copy column carries the headline. */
+  object-position: 18% 50%;
+  filter: saturate(1.05) contrast(1.04);
+}
+
+.pp-banner__visual::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(90deg, transparent 55%, var(--pp-obsidian) 100%);
+  pointer-events: none;
+}
+
+.pp-banner__overlay {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  z-index: 1;
+  pointer-events: none;
+  mix-blend-mode: screen;
+}
+
+/* Slot for a custom artist badge / crest (replace the default SVG) */
+.pp-banner__crest {
+  position: absolute;
+  left: clamp(12px, 2vw, 22px);
+  bottom: clamp(12px, 2vw, 22px);
+  z-index: 2;
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 14px 8px 8px;
+  border: 1px solid var(--pp-line);
+  border-radius: 999px;
+  background: rgba(7, 7, 10, 0.72);
+  backdrop-filter: blur(6px);
+  font: 500 0.68rem/1.2 "DM Mono", ui-monospace, monospace;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--pp-gold-light);
+}
+
+.pp-banner__crest svg,
+.pp-banner__crest img {
+  width: 34px;
+  height: 34px;
+  flex: none;
+}
+
+/* ---------- Copy ---------- */
+.pp-banner__copy {
+  position: relative;
+  z-index: 2;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 16px;
+  padding: clamp(24px, 4vw, 52px);
+}
+
+.pp-banner__eyebrow {
+  margin: 0;
+  font: 500 0.72rem/1.3 "DM Mono", ui-monospace, monospace;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: var(--pp-bronze);
+}
+
+.pp-banner__title {
+  margin: 0;
+  font-family: "Instrument Serif", Georgia, serif;
+  font-weight: 400;
+  font-size: clamp(2.2rem, 4.6vw, 3.9rem);
+  line-height: 0.95;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  background: linear-gradient(100deg, var(--pp-bronze) 0%, var(--pp-gold-light) 28%, var(--pp-gold) 46%, #fff6d6 52%, var(--pp-gold) 60%, var(--pp-bronze) 100%);
+  background-size: 220% 100%;
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  animation: pp-sheen 7s ease-in-out infinite;
+}
+
+.pp-banner__tagline {
+  margin: 0;
+  font: 500 0.8rem/1.5 "DM Mono", ui-monospace, monospace;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--pp-gold-light);
+}
+
+.pp-banner__blurb {
+  margin: 0;
+  max-width: 58ch;
+  font-size: 0.98rem;
+  line-height: 1.6;
+  color: var(--pp-muted);
+}
+
+.pp-banner__highlights {
+  display: grid;
+  gap: 10px;
+  margin: 4px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.pp-banner__highlights li {
+  display: grid;
+  grid-template-columns: 22px 1fr;
+  gap: 10px;
+  align-items: start;
+  font-size: 0.9rem;
+  line-height: 1.45;
+  color: var(--pp-muted);
+}
+
+.pp-banner__highlights strong {
+  color: var(--pp-text);
+  font-weight: 600;
+}
+
+.pp-banner__highlights svg {
+  width: 20px;
+  height: 20px;
+  margin-top: 1px;
+  color: var(--pp-gold);
+}
+
+.pp-banner__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-top: 6px;
+}
+
+.pp-banner__cta,
+.pp-banner__link {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 44px;
+  padding: 0 20px;
+  border-radius: 999px;
+  font: 500 0.78rem/1 "DM Mono", ui-monospace, monospace;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  text-decoration: none;
+  transition: transform 0.2s ease, box-shadow 0.2s ease, background-color 0.2s ease;
+}
+
+.pp-banner__cta {
+  color: #120d05;
+  background: linear-gradient(120deg, var(--pp-bronze), var(--pp-gold) 40%, var(--pp-gold-light) 60%, var(--pp-gold));
+  box-shadow: 0 8px 24px rgba(212, 175, 55, 0.25), inset 0 1px 0 rgba(255, 255, 255, 0.4);
+}
+
+.pp-banner__cta:hover { transform: translateY(-1px); box-shadow: 0 12px 30px rgba(212, 175, 55, 0.35); }
+
+.pp-banner__link {
+  color: var(--pp-gold-light);
+  border: 1px solid var(--pp-line);
+  background: rgba(212, 175, 55, 0.06);
+}
+
+.pp-banner__link:hover { background: rgba(212, 175, 55, 0.14); }
+
+.pp-banner__cta:focus-visible,
+.pp-banner__link:focus-visible {
+  outline: 2px solid var(--pp-gold-light);
+  outline-offset: 3px;
+}
+
+.pp-banner__note {
+  margin: 4px 0 0;
+  font-size: 0.74rem;
+  line-height: 1.5;
+  color: rgba(243, 238, 226, 0.5);
+}
+
+/* ---------- SVG overlay animation ---------- */
+.pp-ring { transform-box: fill-box; transform-origin: center; }
+.pp-ring--slow { animation: pp-spin 38s linear infinite; }
+.pp-ring--rev { animation: pp-spin 26s linear infinite reverse; }
+.pp-pulse { transform-box: fill-box; transform-origin: center; animation: pp-pulse 3.2s ease-out infinite; }
+.pp-pulse--late { animation-delay: 1.6s; }
+.pp-wave { stroke-dasharray: 6 10; animation: pp-dash 2.4s linear infinite; }
+.pp-packet { offset-rotate: 0deg; animation: pp-travel 4.5s cubic-bezier(.5,0,.5,1) infinite; }
+.pp-packet--2 { animation-delay: 1.5s; }
+.pp-packet--3 { animation-delay: 3s; }
+.pp-lock { animation: pp-glint 4.5s ease-in-out infinite; }
+.pp-lock--2 { animation-delay: 1.5s; }
+.pp-lock--3 { animation-delay: 3s; }
+.pp-scan { animation: pp-scan 6s ease-in-out infinite; }
+.pp-crest-ring { transform-box: fill-box; transform-origin: center; animation: pp-spin 18s linear infinite; }
+
+@keyframes pp-spin { to { transform: rotate(360deg); } }
+@keyframes pp-pulse {
+  0% { transform: scale(0.82); opacity: 0.7; }
+  100% { transform: scale(1.35); opacity: 0; }
+}
+@keyframes pp-dash { to { stroke-dashoffset: -64; } }
+@keyframes pp-travel {
+  0% { offset-distance: 0%; opacity: 0; }
+  10% { opacity: 1; }
+  90% { opacity: 1; }
+  100% { offset-distance: 100%; opacity: 0; }
+}
+@keyframes pp-glint {
+  0%, 60%, 100% { opacity: 0.25; }
+  75% { opacity: 1; }
+}
+@keyframes pp-scan {
+  0%, 100% { transform: translateX(-10%); opacity: 0; }
+  20%, 80% { opacity: 0.55; }
+  50% { transform: translateX(110%); }
+}
+@keyframes pp-sheen {
+  0%, 100% { background-position: 100% 0; }
+  50% { background-position: 0% 0; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .pp-banner *,
+  .pp-banner *::before,
+  .pp-banner *::after { animation: none !important; }
+  .pp-packet { offset-distance: 60%; }
+  .pp-lock { opacity: 0.8; }
+  .pp-scan { opacity: 0; }
+}
+
+@media (max-width: 860px) {
+  .pp-banner__grid { grid-template-columns: 1fr; min-height: 0; }
+  .pp-banner__visual { aspect-ratio: 16 / 10; }
+  .pp-banner__art { object-position: 22% 50%; }
+  .pp-banner__visual::after { background: linear-gradient(180deg, transparent 60%, var(--pp-obsidian) 100%); }
+}
+
+@media (max-width: 480px) {
+  .pp-banner { margin: 12px 8px; border-radius: 14px; }
+  .pp-banner__actions { flex-direction: column; }
+  .pp-banner__cta, .pp-banner__link { justify-content: center; }
+}

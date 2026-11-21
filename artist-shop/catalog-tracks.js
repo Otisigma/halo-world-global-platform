@@ -17,7 +17,7 @@
     retry: root.querySelector("#catalog-track-retry")
   };
 
-  const state = { tracks: [], artist: "all", query: "", visible: PAGE_SIZE, playingId: "", loading: false };
+  const state = { tracks: [], artist: "all", query: "", visible: PAGE_SIZE, playingId: "", loading: false, storefront: null };
   const audio = new Audio();
   audio.preload = "none";
 
@@ -81,6 +81,17 @@
     };
   }
 
+  // On an artist storefront (artist-storefront.js) only that artist's songs are in scope,
+  // including collaborations they're credited on.
+  function scopedTracks() {
+    const storefront = window.haloShopArtist;
+    return state.storefront && storefront ? state.tracks.filter(track => storefront.includes(track)) : state.tracks;
+  }
+
+  function announceTracks() {
+    window.dispatchEvent(new CustomEvent("halo:artist-shop-catalog", { detail: { tracks: scopedTracks().slice(), storefront: state.storefront } }));
+  }
+
   function artistKey(name) {
     return String(name || "").toLowerCase().replace(/\s+/g, " ").trim();
   }
@@ -88,7 +99,7 @@
   // Groups artists case-insensitively so "DJ Halo x" and "DJ Halo X" share one filter.
   function artists() {
     const groups = new Map();
-    state.tracks.forEach(track => {
+    scopedTracks().forEach(track => {
       const key = artistKey(track.artist);
       const group = groups.get(key) || { key, name: track.artist, count: 0 };
       group.count += 1;
@@ -99,13 +110,24 @@
 
   function filteredTracks() {
     const query = state.query.trim().toLowerCase();
-    return state.tracks.filter(track =>
+    return scopedTracks().filter(track =>
       (state.artist === "all" || artistKey(track.artist) === state.artist)
       && (!query || `${track.title} ${track.artist} ${track.album} ${track.genre}`.toLowerCase().includes(query)));
   }
 
   function renderFilters() {
     const list = artists();
+    if (state.storefront) {
+      // Collaborators stay filterable, but the storefront artist is always the frame.
+      elements.filters.setAttribute("aria-label", `Filter ${state.storefront.name}'s releases`);
+      elements.filters.innerHTML = [
+        `<button class="filter-button${state.artist === "all" ? " is-active" : ""}" type="button" data-artist="all" aria-pressed="${state.artist === "all"}">All ${escapeHtml(state.storefront.name)} releases · ${scopedTracks().length}</button>`,
+        ...(list.length > 1 ? list.map(({ key, name, count }) => `<button class="filter-button${state.artist === key ? " is-active" : ""}" type="button" data-artist="${escapeHtml(key)}" aria-pressed="${state.artist === key}">${escapeHtml(name)} · ${count}</button>`) : []),
+        `<a class="filter-button" href="${location.pathname}#catalog-tracks">All HALO artists ↗</a>`
+      ].join("");
+      return;
+    }
+    elements.filters.setAttribute("aria-label", "Filter catalog tracks by artist");
     elements.filters.innerHTML = [
       `<button class="filter-button${state.artist === "all" ? " is-active" : ""}" type="button" data-artist="all" aria-pressed="${state.artist === "all"}">All artists</button>`,
       ...list.map(({ key, name, count }) => `<button class="filter-button${state.artist === key ? " is-active" : ""}" type="button" data-artist="${escapeHtml(key)}" aria-pressed="${state.artist === key}">${escapeHtml(name)} · ${count}</button>`)
@@ -122,9 +144,11 @@
     const tracks = filteredTracks();
     const shown = tracks.slice(0, state.visible);
     if (!tracks.length) {
-      elements.grid.innerHTML = state.tracks.length
+      elements.grid.innerHTML = scopedTracks().length
         ? '<div class="empty-state"><h3>No matching tracks.</h3><p>Try another artist or search term.</p></div>'
-        : '<div class="empty-state"><h3>No catalog tracks are live yet.</h3><p>Tracks appear here as soon as they are pushed to Shop &amp; Charts from the HALO Song Catalog.</p></div>';
+        : state.storefront
+          ? `<div class="empty-state"><h3>No releases from ${escapeHtml(state.storefront.name)} are live yet.</h3><p>Their songs appear here as soon as they are pushed to Shop &amp; Charts from the HALO Song Catalog.</p></div>`
+          : '<div class="empty-state"><h3>No catalog tracks are live yet.</h3><p>Tracks appear here as soon as they are pushed to Shop &amp; Charts from the HALO Song Catalog.</p></div>';
     } else {
       elements.grid.innerHTML = shown.map((track, index) => {
         const sale = saleLabel(track);
@@ -150,9 +174,14 @@
   }
 
   function renderStatus() {
-    const forSale = state.tracks.filter(track => track.saleStatus === "for_sale" && track.price).length;
+    const tracks = scopedTracks();
+    const forSale = tracks.filter(track => track.saleStatus === "for_sale" && track.price).length;
+    if (state.storefront) {
+      elements.status.textContent = `${tracks.length} track${tracks.length === 1 ? "" : "s"} by ${state.storefront.name} from the HALO Song Catalog · ${forSale} on sale now`;
+      return;
+    }
     const artistCount = artists().length;
-    elements.status.textContent = `${state.tracks.length} tracks from the HALO Song Catalog · ${artistCount} artist${artistCount === 1 ? "" : "s"} · ${forSale} on sale now`;
+    elements.status.textContent = `${tracks.length} tracks from the HALO Song Catalog · ${artistCount} artist${artistCount === 1 ? "" : "s"} · ${forSale} on sale now`;
   }
 
   function render() {
@@ -176,9 +205,9 @@
       state.tracks = (Array.isArray(data.releases) ? data.releases : [])
         .map(toTrack)
         .filter(track => track && !seen.has(track.id) && seen.add(track.id));
-      if (state.artist !== "all" && !state.tracks.some(track => artistKey(track.artist) === state.artist)) state.artist = "all";
+      if (state.artist !== "all" && !scopedTracks().some(track => artistKey(track.artist) === state.artist)) state.artist = "all";
       render();
-      window.dispatchEvent(new CustomEvent("halo:artist-shop-catalog", { detail: { tracks: state.tracks.slice() } }));
+      announceTracks();
     } catch (error) {
       console.warn("Artist Shop could not load the HALO Song Catalog", error);
       if (!state.tracks.length) {
@@ -258,6 +287,22 @@
     // BroadcastChannel is unavailable in some older browsers; the page still loads on open.
   }
 
-  window.haloArtistShopCatalog = { reload: () => load({ fresh: true }), tracks: () => state.tracks.slice() };
+  // Follow the artist storefront: scope the feed (and the library, via the catalog event) to them.
+  window.addEventListener("halo:shop-artist-profile", event => {
+    const profile = event.detail?.profile || null;
+    if ((state.storefront?.slug || "") === (profile?.slug || "") && state.storefront?.songCount === event.detail?.songIds?.length) return;
+    state.storefront = profile ? { slug: profile.slug, name: profile.name, songCount: event.detail?.songIds?.length || 0 } : null;
+    state.artist = "all";
+    state.visible = PAGE_SIZE;
+    if (!state.tracks.length && state.loading) return;
+    render();
+    announceTracks();
+  });
+  if (window.haloShopArtist?.profile) {
+    const profile = window.haloShopArtist.profile;
+    state.storefront = { slug: profile.slug, name: profile.name, songCount: window.haloShopArtist.songIds.size };
+  }
+
+  window.haloArtistShopCatalog = { reload: () => load({ fresh: true }), tracks: () => scopedTracks().slice() };
   load();
 })();

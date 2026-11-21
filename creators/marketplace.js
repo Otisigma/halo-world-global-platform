@@ -108,6 +108,9 @@ function setModal(modal, open) {
 }
 
 function renderArtists() {
+  // On the Artist Shop the dynamic storefront (artist-storefront.js) owns the profile card and
+  // only hands it back to these concept profiles when no real artist storefront is published.
+  if (window.haloShopArtist?.ownsProfileCard) return;
   const creators = state.catalog?.creators || [];
   if (!creators.length) {
     elements.artistFeature.innerHTML = '<div class="empty-state"><h3>No creators published yet.</h3><p>The founding cohort appears here after approval.</p></div>';
@@ -142,8 +145,18 @@ function renderArtists() {
   });
 }
 
+// On an artist storefront only that artist's concept drops are shown (and the section hides if none).
+function storefrontProducts() {
+  const all = state.catalog?.products || [];
+  const storefront = window.haloShopArtist;
+  const scoped = storefront?.profile ? all.filter(product => storefront.includes({ artist: product.creatorName })) : all;
+  const section = elements.productGrid?.closest("#catalog");
+  if (section && storefront) section.hidden = Boolean(storefront.profile) && !scoped.length;
+  return scoped;
+}
+
 function renderProducts() {
-  const products = (state.catalog?.products || []).filter(product => state.filter === "all" || product.type === state.filter);
+  const products = storefrontProducts().filter(product => state.filter === "all" || product.type === state.filter);
   if (!products.length) {
     elements.productGrid.innerHTML = '<div class="empty-state"><h3>No drops on this frequency yet.</h3><p>Choose another category or return when the founding catalog expands.</p></div>';
     return;
@@ -369,6 +382,13 @@ document.querySelectorAll("[data-filter]").forEach(button => {
     renderProducts();
     window.haloStats?.track("marketplace_filter_changed", { filter: state.filter });
   });
+});
+
+window.addEventListener("halo:shop-profile-released", () => {
+  if (state.catalog) renderArtists();
+});
+window.addEventListener("halo:shop-artist-profile", () => {
+  if (state.catalog) renderProducts();
 });
 
 elements.retryCatalog.addEventListener("click", () => loadCatalog({ announce: true }));

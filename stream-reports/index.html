@@ -1,0 +1,103 @@
+<!doctype html>
+<html lang="en-GB">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#0b0b0c">
+  <meta name="robots" content="noindex, nofollow">
+  <title>Stream Reports — HALO Music World</title>
+  <meta name="description" content="Upload your distributor statements and Spotify for Artists or Apple Music for Artists exports to see your real play counts by track and platform.">
+  <link rel="icon" href="/assets/halo-app-icon-192.png" type="image/png">
+  <link rel="stylesheet" href="/accessibility.css">
+  <link rel="stylesheet" href="/stream-reports/stream-reports.css">
+  <script src="/stats.js" defer></script>
+  <script src="/site-monitor.js" defer></script>
+  <script src="/accessibility.js" defer></script>
+  <script type="module" src="/identity.js"></script>
+  <script src="/stream-reports/stream-reports.js" defer></script>
+</head>
+<body>
+  <header class="sr-header">
+    <a class="sr-brand" href="/halo">HALO</a>
+    <nav aria-label="Artist workspace navigation">
+      <a href="/artist/dashboard">Artist Economy</a>
+      <a href="/release-house/">Release House</a>
+      <button id="identityButton" type="button">Sign in</button>
+    </nav>
+  </header>
+
+  <main class="sr-main">
+    <section class="sr-intro">
+      <p class="sr-kicker">Stream reports</p>
+      <h1>Your real play counts, from your own statements.</h1>
+      <p>Upload the reports your distributor sends you, or exports from Spotify for Artists and Apple Music for Artists. HALO reads them and shows plays by track, platform and month. Nothing is scraped or estimated: every number here comes from a file you uploaded, and only you can see it.</p>
+    </section>
+
+    <section id="lockedView" class="sr-card" hidden>
+      <h2>Sign in to see your reports</h2>
+      <form id="signInForm" class="sr-form">
+        <label>Email<input id="signInEmail" type="email" autocomplete="email" required></label>
+        <label>Password<input id="signInPassword" type="password" autocomplete="current-password" required></label>
+        <button class="sr-button" type="submit">Sign in</button>
+        <p id="signInMessage" class="sr-message" role="status" aria-live="polite"></p>
+      </form>
+    </section>
+
+    <div id="workspace" hidden>
+      <section class="sr-card" aria-labelledby="uploadTitle">
+        <h2 id="uploadTitle">Upload a report</h2>
+        <form id="uploadForm" class="sr-form sr-upload">
+          <label>Where is it from?
+            <select id="sourceSelect" name="source" required></select>
+          </label>
+          <label>Report file (CSV or TSV, up to 5 MB)
+            <input id="reportFile" name="report" type="file" accept=".csv,.tsv,.txt,text/csv,text/tab-separated-values" required>
+          </label>
+          <label id="periodField">Month the report covers <span class="sr-optional">(used only when the file has no date column)</span>
+            <input id="periodMonth" name="periodMonth" type="month">
+          </label>
+          <button id="uploadButton" class="sr-button" type="submit">Import report</button>
+          <p id="uploadMessage" class="sr-message" role="status" aria-live="polite"></p>
+        </form>
+        <details class="sr-help">
+          <summary>Where to find these files</summary>
+          <ul>
+            <li><strong>DistroKid:</strong> in Bank, open the detailed earnings report and download it as TSV.</li>
+            <li><strong>TuneCore, CD Baby, Amuse, Ditto and others:</strong> download the sales or royalty report as CSV.</li>
+            <li><strong>Spotify for Artists and Apple Music for Artists:</strong> open your songs list, choose the date range, and export it as CSV. Pick the month above if the file has no date column.</li>
+          </ul>
+          <p>PDF statements and Excel files can't be read; save them as CSV first. The same file is never counted twice.</p>
+        </details>
+      </section>
+
+      <section class="sr-card" aria-labelledby="totalsTitle">
+        <h2 id="totalsTitle">Plays by platform</h2>
+        <p class="sr-note">From distributor reports. These are the figures you're paid on.</p>
+        <div id="platformTotals" class="sr-tiles"></div>
+        <div id="monthChart" class="sr-months" aria-label="Plays by month"></div>
+      </section>
+
+      <section class="sr-card" aria-labelledby="tracksTitle">
+        <h2 id="tracksTitle">Top tracks</h2>
+        <div class="sr-table-wrap">
+          <table class="sr-table">
+            <thead><tr><th scope="col">Track</th><th scope="col">Platforms</th><th scope="col" class="num">Plays</th><th scope="col" class="num">Downloads</th><th scope="col" class="num" id="earningsHeading">Earnings</th></tr></thead>
+            <tbody id="trackRows"></tbody>
+          </table>
+        </div>
+      </section>
+
+      <section class="sr-card" aria-labelledby="dashboardsTitle">
+        <h2 id="dashboardsTitle">Artist dashboard exports</h2>
+        <p class="sr-note">Spotify for Artists and Apple Music for Artists figures are shown separately. They cover the same plays as your distributor reports, so they're never added to the totals above.</p>
+        <div id="dashboardTotals" class="sr-tiles"></div>
+      </section>
+
+      <section class="sr-card" aria-labelledby="reportsTitle">
+        <h2 id="reportsTitle">Imported reports</h2>
+        <ul id="reportList" class="sr-reports"></ul>
+      </section>
+    </div>
+  </main>
+</body>
+</html>

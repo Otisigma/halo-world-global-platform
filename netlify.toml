@@ -66,6 +66,7 @@
   for = "/*"
   [headers.values]
     X-Content-Type-Options = "nosniff"
+    X-Frame-Options = "SAMEORIGIN"
     Referrer-Policy = "strict-origin-when-cross-origin"
     Permissions-Policy = "camera=(), microphone=(), geolocation=()"
     Access-Control-Allow-Origin = "*"
@@ -82,6 +83,18 @@
     Access-Control-Allow-Methods = "GET, HEAD, OPTIONS"
     Access-Control-Expose-Headers = "Accept-Ranges, Content-Length, Content-Range, Content-Type"
     X-Robots-Tag = "noindex, nofollow"
+
+# The signal console is a labelled simulation; never cache it as if it were live telemetry.
+[[headers]]
+  for = "/halo_signal_network_console.html"
+  [headers.values]
+    Cache-Control = "no-store, max-age=0"
+    X-Robots-Tag = "noindex, nofollow"
+
+[[headers]]
+  for = "/halo-netlify-config.js"
+  [headers.values]
+    Cache-Control = "no-cache"
 
 [[headers]]
   for = "/sw.js"

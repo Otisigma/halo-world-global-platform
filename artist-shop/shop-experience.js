@@ -208,9 +208,20 @@
     toastTimer = setTimeout(() => { el.hidden = true; }, 2600);
   }
 
+  // ---------- Artist storefront scope ----------
+  // On an artist's storefront (artist-storefront.js) drops and the library only show that artist,
+  // collaborations included. The bag stays shared across storefronts.
+  let storefront = window.haloShopArtist?.profile || null;
+  const inStorefront = item => !storefront || !window.haloShopArtist || window.haloShopArtist.includes(item);
+
   // ---------- Signal Drops ----------
   function renderDrops() {
-    $("#signal-drop-grid").innerHTML = STARTER_DROPS.map(drop => `
+    const drops = STARTER_DROPS.filter(inStorefront);
+    if (!drops.length) {
+      $("#signal-drop-grid").innerHTML = `<p class="library-empty">No Signal Drops from ${escapeHtml(storefront?.name || "this artist")} yet — their released music is in the catalog above.</p>`;
+      return;
+    }
+    $("#signal-drop-grid").innerHTML = drops.map(drop => `
       <article class="signal-card">
         <img class="signal-card-art" src="${escapeHtml(drop.art)}" alt="" loading="lazy" decoding="async">
         <div class="signal-card-body">
@@ -248,7 +259,7 @@
       bagId: purchasable.has(`track:${track.id}`) ? `track:${track.id}` : "", url: track.shopUrl, live: true
     }));
     const liveKeys = new Set(live.map(track => track.title.toLowerCase()));
-    return [...live, ...STARTER_TRACKS.filter(track => !liveKeys.has(track.title.toLowerCase()))];
+    return [...live, ...STARTER_TRACKS.filter(track => inStorefront(track) && !liveKeys.has(track.title.toLowerCase()))];
   }
   function visibleTracks() {
     const query = libState.query.trim().toLowerCase();
@@ -269,7 +280,9 @@
     const ready = tracks.filter(track => track.preview).length;
     lib.count.textContent = `${tracks.length} track${tracks.length === 1 ? "" : "s"} · ${ready} ready to play`;
     if (!tracks.length) {
-      lib.list.innerHTML = '<p class="library-empty">No tracks match. Try another style or search.</p>';
+      lib.list.innerHTML = storefront && !libraryTracks().length
+        ? `<p class="library-empty">${escapeHtml(storefront.name)}'s playlist fills up as their previews are published from the HALO Song Catalog.</p>`
+        : '<p class="library-empty">No tracks match. Try another style or search.</p>';
       return;
     }
     const playing = !lib.audio.paused;
@@ -418,6 +431,21 @@
     renderLibrary();
     renderBag();
     window.dispatchEvent(new CustomEvent("halo:currency-change", { detail: { currency: displayCurrency } }));
+  });
+
+  window.addEventListener("halo:shop-artist-profile", event => {
+    storefront = event.detail?.profile || null;
+    const title = document.querySelector("#library-title");
+    if (title) title.textContent = storefront ? `${storefront.name}'s playlist never goes quiet.` : "The library never goes quiet.";
+    // A track from the previous artist stops being "active" if it isn't on this storefront.
+    if (libState.activeId && !visibleTracks().some(track => track.id === libState.activeId)) {
+      if (!lib.audio.paused) lib.audio.pause();
+      libState.activeId = "";
+      setNowPlaying(null);
+    }
+    renderDrops();
+    renderGenres();
+    renderLibrary();
   });
 
   // ---------- Song Catalog feed ----------

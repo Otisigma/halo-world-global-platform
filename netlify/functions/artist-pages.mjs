@@ -139,6 +139,7 @@ function serializePage(row, viewerCanEdit = false) {
     slug: row.slug,
     artistName: row.artist_name,
     tagline: row.tagline || "",
+    role: row.role || "",
     bio: row.bio || "",
     location: row.location || "",
     accentColor: row.accent_color || "#d5ff52",
@@ -341,6 +342,7 @@ async function savePage(request, db, user) {
   const status = allowedStatuses.has(payload.status) ? payload.status : "draft";
   const values = {
     tagline: cleanText(payload.tagline, 180),
+    role: cleanText(payload.role, 80),
     bio: cleanLongText(payload.bio, 1600),
     location: cleanText(payload.location, 100),
     accentColor: cleanColor(payload.accentColor),
@@ -352,7 +354,7 @@ async function savePage(request, db, user) {
   if (existing) {
     await db.sql`
       UPDATE halo_artist_pages SET
-        artist_name = ${artistName}, tagline = ${values.tagline}, bio = ${values.bio},
+        artist_name = ${artistName}, tagline = ${values.tagline}, role = ${values.role}, bio = ${values.bio},
         location = ${values.location}, accent_color = ${values.accentColor}, artwork_url = ${urls.artworkUrl},
         release_title = ${values.releaseTitle}, release_date = ${values.releaseDate}, release_url = ${urls.releaseUrl},
         video_title = ${values.videoTitle}, video_url = ${urls.videoUrl}, community_url = ${urls.communityUrl},
@@ -363,11 +365,11 @@ async function savePage(request, db, user) {
   } else {
     await db.sql`
       INSERT INTO halo_artist_pages (
-        slug, owner_member_id, artist_name, tagline, bio, location, accent_color, artwork_url,
+        slug, owner_member_id, artist_name, tagline, role, bio, location, accent_color, artwork_url,
         release_title, release_date, release_url, video_title, video_url, community_url,
         dj_room_url, radio_room_url, press_room_url, booking_url, website_url, status
       ) VALUES (
-        ${slug}, ${membership.member_id}, ${artistName}, ${values.tagline}, ${values.bio}, ${values.location},
+        ${slug}, ${membership.member_id}, ${artistName}, ${values.tagline}, ${values.role}, ${values.bio}, ${values.location},
         ${values.accentColor}, ${urls.artworkUrl}, ${values.releaseTitle}, ${values.releaseDate}, ${urls.releaseUrl},
         ${values.videoTitle}, ${urls.videoUrl}, ${urls.communityUrl}, ${urls.djRoomUrl}, ${urls.radioRoomUrl},
         ${urls.pressRoomUrl}, ${urls.bookingUrl}, ${urls.websiteUrl}, ${status}
